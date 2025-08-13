@@ -1,0 +1,154 @@
+:root {
+  /* 基础底色与文字 */
+  --bg: #eef2f5;             /* 柔和浅灰蓝 */
+  --surface: #f7fafc;         /* 元素表面色 */
+  --text: #0f172a;            /* 深色文字 */
+  --text-dim: #6b7280;        /* 次要文字 */
+
+  /* 清爽不偏紫的强调色（薄荷蓝 + 暖杏橙作为点缀，可选） */
+  --primary: #4ea8de;         /* 薄荷蓝 */
+  --primary-ghost: rgba(78,168,222,0.18);
+  --accent-warm: #f2b36a;      /* 暖杏橙，尽量少用 */
+
+  /* 拟态阴影（外凸）与按下时（内凹） */
+  --shadow-dark: 10px 10px 24px rgba(163,177,198,0.6);
+  --shadow-light: -10px -10px 24px rgba(255,255,255,0.85);
+  --shadow-dark-sm: 4px 4px 10px rgba(163,177,198,0.55);
+  --shadow-light-sm: -4px -4px 10px rgba(255,255,255,0.9);
+  --shadow-dark-lg: 12px 12px 30px rgba(163,177,198,0.62);
+  --shadow-light-lg: -12px -12px 30px rgba(255,255,255,0.9);
+
+  /* 尺寸与圆角 */
+  --radius-lg: 20px;
+  --radius-md: 16px;
+  --radius-sm: 12px;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+  color: var(--text);
+  background: var(--bg);
+}
+
+#bg { position: fixed; inset: 0; background: linear-gradient(180deg, #f9fbfd, #eef2f5); z-index: 0; }
+
+#app { position: relative; z-index: 1; display: grid; grid-template-columns: 280px 1fr; height: 100vh; }
+
+/* 拟态卡片：柔和外凸，边线减弱 */
+.glass { background: var(--surface); border: 0; border-radius: var(--radius-md); box-shadow: var(--shadow-dark), var(--shadow-light); }
+
+.sidebar { padding: 16px; margin: 16px; display: flex; flex-direction: column; gap: 12px; }
+.sidebar-header { display:flex; align-items:center; justify-content: space-between; }
+.brand { font-weight: 700; letter-spacing: 0.3px; }
+.icon-btn { background: var(--surface); border: 0; color: var(--text); border-radius: var(--radius-sm); padding: 6px 12px; cursor: pointer; box-shadow: var(--shadow-dark-sm), var(--shadow-light-sm); transition: box-shadow .15s ease, transform .12s ease; }
+.icon-btn:hover { box-shadow: 0 0 0 rgba(0,0,0,0), var(--shadow-light-sm), var(--shadow-dark-sm); }
+.icon-btn:active { box-shadow: inset var(--shadow-dark-sm), inset var(--shadow-light-sm); }
+
+.folder-list { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; overflow-x: visible; padding: 4px 6px; border-radius: 0; background: transparent; box-shadow: none; }
+.folder-item { position: relative; display:flex; align-items:center; gap:10px; padding:10px 12px; margin: 2px 6px; border-radius: var(--radius-sm); cursor:pointer; transition: transform .15s ease, box-shadow .15s ease, background .15s ease; border:0; background: var(--surface); box-shadow: var(--shadow-dark-sm), var(--shadow-light-sm); overflow: visible; }
+.folder-item:hover { transform: translateY(-1px); }
+.folder-item.active { box-shadow: var(--shadow-dark-sm), var(--shadow-light-sm); background: linear-gradient(145deg, #ffffff, #e9eef3); }
+.folder-item.active::before { content: ''; position: absolute; left: 6px; top: 6px; width: 6px; height: calc(100% - 12px); border-radius: 6px; background: linear-gradient(180deg, var(--primary), rgba(78,168,222,0.55)); }
+.folder-item .icon { width:24px; height:24px; display:grid; place-items:center; }
+.folder-item .name { font-weight: 600; }
+
+.primary-btn, .ghost-btn, .mini-btn { cursor: pointer; border-radius: var(--radius-sm); border: 0; color: var(--text); transition: box-shadow .15s ease, transform .12s ease; }
+.primary-btn { background: var(--primary); padding: 0 18px; font-weight: 700; color: #fff; box-shadow: var(--shadow-dark-sm), var(--shadow-light-sm); height: 40px; }
+.primary-btn:hover { filter: brightness(1.05); }
+.ghost-btn { background: var(--surface); padding: 0 18px; box-shadow: var(--shadow-dark-sm), var(--shadow-light-sm); height: 40px; }
+.ghost-btn:hover { background: rgba(17,24,39,0.05); }
+.mini-btn { background: var(--surface); padding: 6px 10px; font-size: 12px; box-shadow: var(--shadow-dark-sm), var(--shadow-light-sm); }
+.mini-btn:hover { transform: translateY(-1px); }
+.primary-btn:active, .ghost-btn:active, .mini-btn:active { box-shadow: inset var(--shadow-dark-sm), inset var(--shadow-light-sm); }
+
+.content { padding: 16px 16px 32px 0; display:flex; flex-direction: column; gap: 12px; }
+.content-header { display:flex; align-items:center; justify-content: space-between; padding: 12px 16px; }
+.content-header .right { display:flex; align-items:center; gap: 12px; }
+.search { background: var(--surface); color: var(--text); border: 0; border-radius: var(--radius-sm); padding: 0 16px; min-width: 260px; box-shadow: var(--shadow-dark-sm), var(--shadow-light-sm); height: 40px; line-height: 40px; -webkit-appearance: none; }
+.search::placeholder { color: var(--text-dim); }
+.search:focus, .search:focus-visible { outline: none; box-shadow: inset var(--shadow-dark-sm), inset var(--shadow-light-sm), 0 0 0 2px var(--primary-ghost); }
+
+.subfolders { display:flex; gap: 12px; flex-wrap: wrap; }
+.subfolder-item { display:flex; align-items:center; justify-content: space-between; gap: 10px; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--surface); box-shadow: var(--shadow-dark-sm), var(--shadow-light-sm); }
+.subfolder-item .left { display:flex; align-items:center; gap: 10px; }
+.subfolder-item .icon { width: 24px; height: 24px; display:grid; place-items:center; }
+.subfolder-item .name { font-weight: 600; }
+
+.bookmark-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 22px; }
+.bookmark-card { padding: 12px; display:flex; flex-direction: column; align-items:center; gap: 10px; cursor: pointer; transition: transform .15s ease; background: transparent; border-radius: var(--radius-md); box-shadow: none; }
+.bookmark-card:hover { transform: translateY(-3px); }
+.bookmark-card .cover { width: 68px; height: 68px; border-radius: var(--radius-md); background: var(--surface); display:flex; align-items:center; justify-content:center; overflow:hidden; box-shadow: var(--shadow-dark-lg), var(--shadow-light-lg); }
+.bookmark-card .cover img { max-height: 60px; max-width: 60px; border-radius: 10px; }
+.bookmark-card .cover .mono-icon { width: 60px; height: 60px; border-radius: 14px; display:grid; place-items:center; font-weight: 700; color:#fff; }
+.bookmark-card .title { display:block; font-weight:600; font-size: 13px; color: var(--text); max-width: 100%; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+@media (max-width: 900px) {
+  #app { grid-template-columns: 80px 1fr; }
+  .folder-item .name, .brand { display:none; }
+}
+
+/* Modal */
+.modal-backdrop { position: fixed; inset: 0; background: rgba(17,24,39,0.35); backdrop-filter: blur(2px); z-index: 30; }
+.modal { position: fixed; inset: 0; display:grid; place-items:center; z-index: 40; }
+.modal .panel { width: 640px; max-width: calc(100vw - 48px); border-radius: var(--radius-md); box-shadow: var(--shadow-dark), var(--shadow-light); }
+.modal .inner { padding: 20px; }
+.modal .row { display:grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 10px; }
+.modal .field { display:flex; flex-direction: column; gap: 8px; }
+.modal .label { font-size: 12px; color: var(--text-dim); }
+.hidden { display: none !important; }
+
+/* Modal preview cover */
+.modal .cover { width: 48px; height: 48px; border-radius: var(--radius-sm); background: var(--surface); display:flex; align-items:center; justify-content:center; overflow:hidden; box-shadow: var(--shadow-dark-sm), var(--shadow-light-sm); }
+.modal .cover img { max-width: 28px; max-height: 28px; }
+.modal .cover .mono-icon { width: 28px; height: 28px; border-radius: 8px; display:grid; place-items:center; font-weight:700; color:#fff; }
+
+.fav-candidates { display:flex; gap:10px; flex-wrap: wrap; margin-top: 6px; }
+.fav-candidate { width:40px; height:40px; display:grid; place-items:center; border-radius:10px; background:#fff; border:1px solid var(--glass-border); box-shadow: var(--shadow); cursor:pointer; }
+.fav-candidate img { max-width:24px; max-height:24px; }
+.fav-candidate:hover { outline: 2px solid var(--primary); }
+
+/* Options page layout */
+.options-app { display:flex; justify-content:center; align-items:flex-start; min-height: 100vh; padding: 32px; box-sizing: border-box; }
+.options-card { width: 840px; max-width: 100%; padding: 20px; background: var(--surface); box-shadow: var(--shadow-dark), var(--shadow-light); border-radius: var(--radius-md); }
+.options-title { margin: 0 0 10px 0; }
+.options-topbar { display:flex; align-items:center; justify-content: space-between; }
+.options-section { display: grid; grid-template-columns: 1fr; gap: 18px; }
+.options-block { }
+.options-block-title { margin: 4px 0 10px 0; font-size: 16px; }
+.options-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: end; }
+.options-row { display:flex; align-items:center; gap: 16px; margin-bottom: 10px; }
+.options-row:last-child { margin-bottom: 0; }
+.options-row.wrap { flex-wrap: wrap; }
+.options-actions { display:flex; align-items:center; gap: 10px; }
+.options-list { list-style: none; padding: 0; margin-top: 10px; display:flex; flex-direction: column; gap: 8px; max-height: 360px; overflow: auto; padding-right: 6px; }
+
+/* 滚动条拟态化 */
+.options-list::-webkit-scrollbar { width: 10px; height: 10px; }
+.options-list::-webkit-scrollbar-thumb { background: var(--surface); border-radius: 10px; box-shadow: inset var(--shadow-dark-sm), inset var(--shadow-light-sm); }
+.options-list::-webkit-scrollbar-track { background: transparent; }
+
+/* 通用小弹窗 */
+.tm-message { margin-bottom: 8px; color: var(--text-dim); }
+
+/* 自定义右键菜单 */
+.context-menu { position: fixed; z-index: 1000; background: var(--surface); border-radius: var(--radius-sm); box-shadow: var(--shadow-dark-sm), var(--shadow-light-sm); overflow: hidden; }
+.context-menu ul { list-style: none; margin: 0; padding: 6px; display:flex; flex-direction: column; gap: 4px; }
+.context-menu li { padding: 8px 12px; border-radius: var(--radius-sm); cursor: pointer; }
+.context-menu li:hover { background: rgba(15,23,42,0.04); }
+.options-wide { min-width: 320px; }
+.options-field { display:flex; flex-direction: column; gap: 10px; }
+.options-inline { display:flex; align-items:center; gap: 8px; }
+.options-input-sm { width: 180px; }
+
+/* 防止输入控件溢出容器 */
+.options-card .search { width: 100%; }
+.options-grid-2 .options-field > .search { width: 100%; }
+.options-row > .search { width: auto; }
+
+@media (max-width: 720px) {
+  .options-grid-2 { grid-template-columns: 1fr; }
+  .options-app { padding: 16px; }
+}

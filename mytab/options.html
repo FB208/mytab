@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MyTab 设置</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="options-root" class="options-app">
+    <div class="options-card glass">
+      <div class="options-topbar">
+        <h2 class="options-title">设置</h2>
+        <button id="btn-back-home" class="ghost-btn">返回首页</button>
+      </div>
+      <section class="options-section">
+        <div class="options-block">
+          <h3 class="options-block-title">WebDAV</h3>
+          <div class="options-grid-2">
+            <label class="options-field">URL
+              <input id="dav-url" class="search" placeholder="https://dav.example.com/remote.php/dav/files/xxx/mytab/" />
+            </label>
+            <label class="options-field">用户名
+              <input id="dav-username" class="search" />
+            </label>
+            <label class="options-field">密码
+              <input id="dav-password" class="search" type="password" />
+            </label>
+            <div class="options-actions">
+              <button id="btn-test" class="primary-btn">测试连接</button>
+              <button id="btn-save" class="ghost-btn">保存</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="options-block">
+          <h3 class="options-block-title">自动备份</h3>
+          <div class="options-row">
+            <label class="options-inline"><input type="checkbox" id="backup-enabled" /> 开启自动备份</label>
+          </div>
+          <div class="options-row">
+            <label class="options-field">频率（小时）
+              <input id="backup-hours" class="search options-input-sm" type="number" min="0.25" step="0.25" />
+            </label>
+            <label class="options-field">历史上限
+              <input id="backup-max" class="search options-input-sm" type="number" min="1" step="1" />
+            </label>
+          </div>
+          <div class="options-row">
+            <button id="btn-backup-now" class="primary-btn">立即备份</button>
+          </div>
+        </div>
+
+        <div class="options-block">
+          <h3 class="options-block-title">历史记录（WebDAV）</h3>
+          <div class="options-row">
+            <button id="btn-refresh-list" class="ghost-btn">刷新列表</button>
+          </div>
+          <ul id="backup-list" class="options-list"></ul>
+        </div>
+
+        <div class="options-block">
+          <h3 class="options-block-title">背景图片</h3>
+          <div class="options-row">
+            <input id="bg-url" class="search options-wide" placeholder="输入图片 URL" />
+            <button id="btn-bg-save" class="ghost-btn">保存背景</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script type="module" src="scripts/options.js"></script>
+</body>
+</html>

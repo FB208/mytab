@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MyTab</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/png" sizes="32x32" href="icon32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="icon16.png">
+  <link rel="shortcut icon" href="icon32.png">
+  <link rel="apple-touch-icon" href="icon128.png">
+  <meta name="msapplication-TileImage" content="icon128.png">
+  <meta name="msapplication-TileColor" content="#f3f6fb">
+</head>
+<body>
+  <div id="bg"></div>
+  <div id="app">
+    <aside class="sidebar glass">
+      <div class="sidebar-header">
+        <div class="brand">MyTab</div>
+        <button id="btn-settings" title="设置" class="icon-btn">⚙️</button>
+      </div>
+      <div id="folder-list" class="folder-list"></div>
+      <button id="btn-add-folder" class="primary-btn">＋ 新建一级文件夹</button>
+    </aside>
+
+    <main class="content">
+      <header class="content-header glass">
+        <div class="left">
+          <h1 id="current-folder-name">欢迎 👋</h1>
+        </div>
+        <div class="right">
+          <input id="search" class="search" placeholder="搜索书签..." />
+          <button id="btn-add-bookmark" class="primary-btn">＋ 添加书签</button>
+          <button id="btn-add-subfolder" class="ghost-btn">＋ 二级文件夹</button>
+        </div>
+      </header>
+
+      <section class="subfolders" id="subfolder-list"></section>
+
+      <section class="bookmark-grid" id="bookmark-grid"></section>
+    </main>
+  </div>
+
+  <template id="tpl-folder-item">
+    <div class="folder-item" data-id="">
+      <div class="icon">📁</div>
+      <div class="name"></div>
+    </div>
+  </template>
+
+  <template id="tpl-subfolder-item">
+    <div class="subfolder-item glass" data-id="">
+      <div class="left">
+        <div class="icon">📂</div>
+        <div class="name"></div>
+      </div>
+      <div class="right">
+        <button class="mini-btn rename">重命名</button>
+        <button class="mini-btn delete">删除</button>
+      </div>
+    </div>
+  </template>
+
+  <template id="tpl-bookmark-card">
+    <div class="bookmark-card" data-id="" title="">
+      <div class="cover">
+        <img class="favicon" alt="" />
+        <div class="mono-icon" style="display:none"><span class="letter"></span></div>
+      </div>
+      <div class="title"></div>
+    </div>
+  </template>
+
+  <!-- Modal: 添加/编辑书签 -->
+  <div id="modal-backdrop" class="modal-backdrop hidden"></div>
+  <div id="bookmark-modal" class="modal hidden">
+    <div class="panel glass">
+      <div class="inner">
+        <div style="display:flex; align-items:center; justify-content: space-between;">
+          <h3 id="modal-title" style="margin: 6px 0 12px 0;">添加书签</h3>
+          <button id="modal-close" class="icon-btn">✕</button>
+        </div>
+        <div class="row">
+          <div class="field">
+            <div class="label">网址</div>
+            <input id="bm-url" class="search" placeholder="https://example.com" />
+          </div>
+          <div class="field">
+            <div class="label">名称（可选）</div>
+            <input id="bm-name" class="search" placeholder="显示名称" />
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <div class="label">图标模式</div>
+            <div>
+              <label style="margin-right:12px;"><input type="radio" name="icon-mode" value="favicon" checked /> Favicon</label>
+              <label><input type="radio" name="icon-mode" value="mono" /> 单色图标</label>
+            </div>
+          </div>
+          <div class="field">
+            <div class="label">预览</div>
+            <div style="display:flex; align-items:center; gap:12px;">
+              <div class="cover">
+                <img id="preview-fav" class="favicon" alt="" />
+                <div id="preview-mono" class="mono-icon" style="display:none"><span class="letter">W</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="row" id="row-favicon">
+          <div class="field">
+            <div class="label">Favicon 地址（可留空自动）</div>
+            <input id="bm-favicon" class="search" placeholder="https://example.com/favicon.ico" />
+          </div>
+          <div class="field">
+            <div class="label">从网址获取</div>
+            <div style="display:flex; gap:10px; align-items:center;">
+              <button id="bm-fetch-fav" class="ghost-btn">获取网站图标</button>
+            </div>
+          </div>
+        </div>
+        <div class="row hidden" id="row-fav-candidates" style="grid-template-columns:1fr;">
+          <div class="field" style="grid-column: 1 / -1;">
+            <div class="label">可选图标（点击选择）</div>
+            <div id="bm-fav-candidates" class="fav-candidates"></div>
+          </div>
+        </div>
+        <div class="row hidden" id="row-mono">
+          <div class="field">
+            <div class="label">字母</div>
+            <input id="bm-letter" class="search" placeholder="A" maxlength="1" />
+          </div>
+          <div class="field">
+            <div class="label">背景色</div>
+            <input id="bm-color" class="search" type="color" value="#7c5cff" />
+          </div>
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:12px;">
+          <button id="modal-cancel" class="ghost-btn">取消</button>
+          <button id="modal-save" class="primary-btn">保存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 通用输入/确认弹窗 -->
+  <div id="text-modal" class="modal hidden">
+    <div class="panel glass">
+      <div class="inner">
+        <div style="display:flex; align-items:center; justify-content: space-between;">
+          <h3 id="tm-title" style="margin: 6px 0 12px 0;">输入</h3>
+          <button id="tm-close" class="icon-btn">✕</button>
+        </div>
+        <div id="tm-message" class="tm-message hidden"></div>
+        <input id="tm-input" class="search" placeholder="请输入" />
+        <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:12px;">
+          <button id="tm-cancel" class="ghost-btn">取消</button>
+          <button id="tm-save" class="primary-btn">确定</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 自定义右键菜单 -->
+  <div id="context-menu" class="context-menu hidden">
+    <ul id="context-menu-list"></ul>
+  </div>
+
+  <script src="scripts/storage.js" type="module"></script>
+  <script src="scripts/app.js" type="module"></script>
+</body>
+  
+</html>
