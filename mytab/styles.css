@@ -81,8 +81,9 @@ body {
 .bookmark-card { padding: 12px; display:flex; flex-direction: column; align-items:center; gap: 10px; cursor: pointer; transition: transform .15s ease; background: transparent; border-radius: var(--radius-md); box-shadow: none; }
 .bookmark-card:hover { transform: translateY(-3px); }
 .bookmark-card .cover { width: 68px; height: 68px; border-radius: var(--radius-md); background: var(--surface); display:flex; align-items:center; justify-content:center; overflow:hidden; box-shadow: var(--shadow-dark-lg), var(--shadow-light-lg); }
-.bookmark-card .cover img { max-height: 60px; max-width: 60px; border-radius: 10px; }
-.bookmark-card .cover .mono-icon { width: 60px; height: 60px; border-radius: 14px; display:grid; place-items:center; font-weight: 700; color:#fff; }
+/* 统一图标显示尺寸与比例 */
+.bookmark-card .cover img.favicon { width: 60px; height: 60px; object-fit: contain; border-radius: 12px; image-rendering: -webkit-optimize-contrast; }
+.bookmark-card .cover .mono-icon { width: 60px; height: 60px; border-radius: 12px; display:grid; place-items:center; font-weight: 700; color:#fff; font-size: 28px; line-height: 1; }
 .bookmark-card .title { display:block; font-weight:600; font-size: 13px; color: var(--text); max-width: 100%; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
 @media (max-width: 900px) {
@@ -99,11 +100,21 @@ body {
 .modal .field { display:flex; flex-direction: column; gap: 8px; }
 .modal .label { font-size: 12px; color: var(--text-dim); }
 .hidden { display: none !important; }
+/* 搜索列表 */
+.search-list { display:flex; flex-direction: column; gap: 8px; max-height: 420px; margin-top:12px; }
+.search-item { display:flex; align-items:center; gap: 10px; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--surface); box-shadow: var(--shadow-dark-sm), var(--shadow-light-sm); cursor: pointer; }
+.search-item:hover { transform: translateY(-1px); }
+.search-item .cover { width: 36px; height: 36px; border-radius: 10px; background: var(--surface); display:flex; align-items:center; justify-content:center; overflow:hidden; box-shadow: var(--shadow-dark-sm), var(--shadow-light-sm); }
+.search-item .cover img { width: 28px; height: 28px; object-fit: contain; }
+.search-item .cover .mono { width: 28px; height: 28px; border-radius: 8px; display:grid; place-items:center; color:#fff; font-weight:700; font-size:14px; }
+.search-item .meta { display:flex; flex-direction: column; min-width: 0; }
+.search-item .meta .name { font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.search-item .meta .url { color: var(--text-dim); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* Modal preview cover */
 .modal .cover { width: 48px; height: 48px; border-radius: var(--radius-sm); background: var(--surface); display:flex; align-items:center; justify-content:center; overflow:hidden; box-shadow: var(--shadow-dark-sm), var(--shadow-light-sm); }
 .modal .cover img { max-width: 28px; max-height: 28px; }
-.modal .cover .mono-icon { width: 28px; height: 28px; border-radius: 8px; display:grid; place-items:center; font-weight:700; color:#fff; }
+.modal .cover .mono-icon { width: 28px; height: 28px; border-radius: 8px; display:grid; place-items:center; font-weight:700; color:#fff; font-size: 16px; line-height: 1; }
 
 .fav-candidates { display:flex; gap:10px; flex-wrap: wrap; margin-top: 6px; }
 .fav-candidate { width:40px; height:40px; display:grid; place-items:center; border-radius:10px; background:#fff; border:1px solid var(--glass-border); box-shadow: var(--shadow); cursor:pointer; }

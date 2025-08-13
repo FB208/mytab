@@ -1,4 +1,4 @@
-import { ensureInit, readAll, addFolder, renameFolder, deleteFolder, addSubfolder, renameSubfolder, deleteSubfolder, addBookmark, renameBookmark, deleteBookmark, buildFaviconUrl, updateBookmarkMono, updateBookmarkFavicon, updateBookmark, reorderBookmarksRelative } from './storage.js';
+import { ensureInit, readAll, addFolder, renameFolder, deleteFolder, addSubfolder, renameSubfolder, deleteSubfolder, addBookmark, renameBookmark, deleteBookmark, buildFaviconUrl, updateBookmarkMono, updateBookmarkFavicon, updateBookmark, reorderBookmarksRelative, moveBookmark } from './storage.js';
 
 let state = {
   selectedFolderId: null,
@@ -50,7 +50,86 @@ function bindEvents() {
   document.getElementById('search').addEventListener('input', (e) => {
     state.keyword = e.target.value.trim();
     renderBookmarkGrid();
+    triggerGlobalSearch(state.keyword);
   });
+
+// 全局搜索弹窗
+const searchModal = {
+  root: document.getElementById('search-modal'),
+  close: document.getElementById('search-close'),
+  list: document.getElementById('search-list')
+};
+searchModal.close?.addEventListener('click', () => toggleSearch(false));
+
+let searchTimer = null;
+function triggerGlobalSearch(keyword) {
+  clearTimeout(searchTimer);
+  if (!keyword) { toggleSearch(false); return; }
+  searchTimer = setTimeout(async () => {
+    const items = await collectGlobalMatches(keyword);
+    if (items.length === 0) { toggleSearch(false); return; }
+    renderSearchList(items);
+    toggleSearch(true);
+  }, 250);
+}
+
+async function collectGlobalMatches(keyword) {
+  const k = keyword.toLowerCase();
+  const { data } = await readAll();
+  const results = [];
+  data.folders.forEach(folder => {
+    const pushItem = (bm, sub) => {
+      if (!bm) return;
+      const txt = `${bm.name || ''} ${bm.url || ''}`.toLowerCase();
+      if (txt.includes(k)) {
+        results.push({
+          id: bm.id,
+          name: bm.name || bm.url,
+          url: bm.url,
+          iconType: bm.iconType,
+          iconUrl: bm.iconUrl,
+          mono: bm.mono,
+          folderId: folder.id,
+          subId: sub?.id || null,
+          folderName: folder.name,
+          subName: sub?.name || ''
+        });
+      }
+    };
+    (folder.bookmarks || []).forEach(b => pushItem(b, null));
+    (folder.subfolders || []).forEach(sub => (sub.bookmarks || []).forEach(b => pushItem(b, sub)));
+  });
+  return results.slice(0, 200);
+}
+
+function toggleSearch(show) {
+  searchModal.root.classList.toggle('hidden', !show);
+}
+
+function renderSearchList(items) {
+  searchModal.list.innerHTML = '';
+  items.forEach(it => {
+    const row = document.createElement('div');
+    row.className = 'search-item';
+    const cover = document.createElement('div');
+    cover.className = 'cover';
+    if (it.iconType === 'favicon' && it.iconUrl) {
+      const img = document.createElement('img');
+      img.src = it.iconUrl; cover.appendChild(img);
+    } else if (it.mono) {
+      const m = document.createElement('div');
+      m.className = 'mono'; m.style.background = it.mono.color; m.textContent = (it.mono.letter || '?').toUpperCase();
+      cover.appendChild(m);
+    }
+    const meta = document.createElement('div'); meta.className = 'meta';
+    const name = document.createElement('div'); name.className = 'name'; name.textContent = it.name;
+    const url = document.createElement('div'); url.className = 'url'; url.textContent = it.url;
+    meta.appendChild(name); meta.appendChild(url);
+    row.appendChild(cover); row.appendChild(meta);
+    row.addEventListener('click', () => window.open(it.url, '_blank'));
+    searchModal.list.appendChild(row);
+  });
+}
 }
 
 async function render() {
@@ -76,6 +155,21 @@ async function renderFolderList() {
     el.querySelector('.icon').textContent = folder.icon || '📁';
     el.querySelector('.name').textContent = folder.name;
     if (folder.id === state.selectedFolderId) el.classList.add('active');
+    // 作为拖拽目标：允许放置书签，移动到该一级文件夹
+    el.addEventListener('dragover', (ev) => {
+      ev.preventDefault();
+      ev.dataTransfer.dropEffect = 'move';
+    });
+    el.addEventListener('drop', async (ev) => {
+      ev.preventDefault();
+      const bookmarkId = ev.dataTransfer.getData('text/plain');
+      if (!bookmarkId) return;
+      const { data } = await readAll();
+      const currentFolder = data.folders.find(f => f.id === state.selectedFolderId);
+      if (!currentFolder) return;
+      const ok = await moveBookmark({ sourceFolderId: state.selectedFolderId, sourceSubId: state.selectedSubId, bookmarkId, targetFolderId: folder.id, targetSubId: null });
+      if (ok) { renderBookmarkGrid(); }
+    });
     el.addEventListener('click', () => {
       state.selectedFolderId = folder.id;
       state.selectedSubId = null;
@@ -108,6 +202,15 @@ async function renderSubfolders() {
     const el = document.getElementById('tpl-subfolder-item').content.firstElementChild.cloneNode(true);
     el.dataset.id = sub.id;
     el.querySelector('.name').textContent = sub.name;
+    // 作为拖拽目标：允许放置书签，移动到该二级文件夹
+    el.addEventListener('dragover', (ev) => { ev.preventDefault(); ev.dataTransfer.dropEffect = 'move'; });
+    el.addEventListener('drop', async (ev) => {
+      ev.preventDefault();
+      const bookmarkId = ev.dataTransfer.getData('text/plain');
+      if (!bookmarkId) return;
+      const ok = await moveBookmark({ sourceFolderId: state.selectedFolderId, sourceSubId: state.selectedSubId, bookmarkId, targetFolderId: folder.id, targetSubId: sub.id });
+      if (ok) { renderBookmarkGrid(); }
+    });
     el.addEventListener('click', () => { state.selectedSubId = sub.id; renderBookmarkGrid(); });
     el.querySelector('.rename').addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -233,10 +336,21 @@ async function textPrompt({ title = '输入', message = '', placeholder = '', va
     root.classList.remove('hidden');
     backdrop.classList.remove('hidden');
     input.focus();
-    const cleanup = (val) => {
+  const onKey = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      cleanup(input.value.trim());
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      cleanup('');
+    }
+  };
+  input.addEventListener('keydown', onKey);
+  const cleanup = (val) => {
       root.classList.add('hidden');
       backdrop.classList.add('hidden');
       btnClose.onclick = btnCancel.onclick = btnSave.onclick = null;
+    input.removeEventListener('keydown', onKey);
       resolve(val);
     };
     btnClose.onclick = () => cleanup('');
@@ -341,9 +455,25 @@ function openBookmarkModal({ mode, bookmark = null, folderId = null, subId = nul
   showModal(true);
 }
 
+let modalKeydownHandler = null;
 function showModal(show) {
   modal.backdrop.classList.toggle('hidden', !show);
   modal.root.classList.toggle('hidden', !show);
+  if (show) {
+    modalKeydownHandler = (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        modal.save?.click();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        modal.cancel?.click();
+      }
+    };
+    modal.root.addEventListener('keydown', modalKeydownHandler);
+  } else if (modalKeydownHandler) {
+    modal.root.removeEventListener('keydown', modalKeydownHandler);
+    modalKeydownHandler = null;
+  }
 }
 
 modal.close?.addEventListener('click', () => showModal(false));
@@ -355,6 +485,16 @@ modal.modeRadios().forEach(r => r.addEventListener('change', () => {
 }));
 
 [modal.url, modal.favUrl, modal.letter, modal.color].forEach(el => el?.addEventListener('input', refreshPreview));
+// 网址变化时自动尝试获取网站图标（防抖）
+let favFetchBusy = false;
+let favFetchTimer = null;
+let favFetchLastUrl = '';
+modal.url?.addEventListener('input', () => {
+  const url = modal.url.value.trim();
+  clearTimeout(favFetchTimer);
+  if (!url) return;
+  favFetchTimer = setTimeout(() => doFetchFavicons(url, true), 500);
+});
 
 modal.save?.addEventListener('click', async () => {
   const folderId = modalCtx.folderId;
@@ -390,29 +530,38 @@ modal.save?.addEventListener('click', async () => {
 modal.fetchFav?.addEventListener('click', async () => {
   const url = modal.url.value.trim();
   if (!url) { alert('请先填写网址'); return; }
+  await doFetchFavicons(url, false);
+});
+
+async function doFetchFavicons(url, isAuto) {
+  if (favFetchBusy) return; // 避免重复执行
+  if (isAuto && favFetchLastUrl === url) return; // 同一网址防重复
+  favFetchBusy = true;
+  const btn = modal.fetchFav;
+  const prevText = btn?.textContent;
+  if (!isAuto && btn) { btn.disabled = true; btn.textContent = '获取中…'; }
+  favFetchLastUrl = url;
   try {
-    // 优先后台获取（可跨域解析 HTML），失败再前端兜底
     let candidates = [];
     try {
-      // 仅在已获授权时才尝试后台抓取，避免弹窗打扰
+      // 已获授权才使用后台抓取，避免权限弹窗
       let hasPerm = false;
-      try {
-        const u = new URL(url);
-        hasPerm = await chrome.permissions.contains({ origins: [u.origin + '/*'] });
-      } catch (e) {}
+      try { const u = new URL(url); hasPerm = await chrome.permissions.contains({ origins: [u.origin + '/*'] }); } catch (e) {}
       if (hasPerm) {
         const res = await chrome.runtime.sendMessage({ type: 'favicon:fetch', pageUrl: url });
         if (res?.ok) candidates = res.icons || [];
       }
     } catch (e) {}
     if (candidates.length === 0) candidates = await collectFavicons(url);
-    // 去重
     const uniq = [...new Set(candidates)];
     renderFavCandidates(uniq);
   } catch (e) {
-    alert('获取失败');
+    if (!isAuto) alert('获取失败');
+  } finally {
+    favFetchBusy = false;
+    if (!isAuto && btn) { btn.disabled = false; btn.textContent = prevText; }
   }
-});
+}
 
 function getIconMode() { return modal.modeRadios().find(r => r.checked)?.value || 'favicon'; }
 

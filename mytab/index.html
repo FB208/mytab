@@ -171,6 +171,19 @@
     <ul id="context-menu-list"></ul>
   </div>
 
+  <!-- 搜索结果弹窗 -->
+  <div id="search-modal" class="modal hidden">
+    <div class="panel glass">
+      <div class="inner">
+        <div style="display:flex; align-items:center; justify-content: space-between;">
+          <h3 id="search-title" style="margin: 6px 0 12px 0;">搜索结果</h3>
+          <button id="search-close" class="icon-btn">✕</button>
+        </div>
+        <div id="search-list" class="search-list"></div>
+      </div>
+    </div>
+  </div>
+
   <script src="scripts/storage.js" type="module"></script>
   <script src="scripts/app.js" type="module"></script>
 </body>

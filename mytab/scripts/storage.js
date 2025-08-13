@@ -206,6 +206,23 @@ export async function updateBookmark({ folderId, subId, bookmarkId, url, name, i
   notifyChanged();
 }
 
+// 移动书签到目标文件夹/二级文件夹
+export async function moveBookmark({ sourceFolderId, sourceSubId, bookmarkId, targetFolderId, targetSubId }) {
+  const data = await readData();
+  const src = locateContainer(data, sourceFolderId, sourceSubId || null);
+  const dst = locateContainer(data, targetFolderId, targetSubId || null);
+  if (!src || !dst) return false;
+  const idx = (src.bookmarks || []).findIndex(b => b.id === bookmarkId);
+  if (idx < 0) return false;
+  const [bm] = src.bookmarks.splice(idx, 1);
+  dst.bookmarks = dst.bookmarks || [];
+  dst.bookmarks.push(bm);
+  data.lastModified = Date.now();
+  await writeData(data);
+  notifyChanged();
+  return true;
+}
+
 // 拖拽排序：sourceId 拖到 targetId 之前
 export async function reorderBookmarksRelative({ folderId, subId, sourceId, targetId }) {
   const data = await readData();
