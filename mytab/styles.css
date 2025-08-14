@@ -71,6 +71,8 @@ body {
 .search { background: var(--surface); color: var(--text); border: 0; border-radius: var(--radius-sm); padding: 0 16px; min-width: 260px; box-shadow: var(--shadow-dark-sm), var(--shadow-light-sm); height: 40px; line-height: 40px; -webkit-appearance: none; }
 .search::placeholder { color: var(--text-dim); }
 .search:focus, .search:focus-visible { outline: none; box-shadow: inset var(--shadow-dark-sm), inset var(--shadow-light-sm), 0 0 0 2px var(--primary-ghost); }
+/* 提升标题在任意背景下的可读性 */
+.content-header h1 { text-shadow: 0 2px 6px rgba(0,0,0,0.22), 0 1px 2px rgba(0,0,0,0.18); }
 
 .subfolders { display:flex; gap: 12px; flex-wrap: wrap; }
 .subfolder-item { display:flex; align-items:center; justify-content: space-between; gap: 10px; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--surface); box-shadow: var(--shadow-dark-sm), var(--shadow-light-sm); }
@@ -86,7 +88,7 @@ body {
 /* 统一图标显示尺寸与比例 */
 .bookmark-card .cover img.favicon { width: 60px; height: 60px; object-fit: contain; border-radius: 12px; image-rendering: -webkit-optimize-contrast; }
 .bookmark-card .cover .mono-icon { width: 60px; height: 60px; border-radius: 12px; display:grid; place-items:center; font-weight: 700; color:#fff; font-size: 28px; line-height: 1; }
-.bookmark-card .title { display:block; font-weight:600; font-size: 13px; color: var(--text); max-width: 100%; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.bookmark-card .title { display:block; font-weight:600; font-size: 13px; color: var(--text); max-width: 100%; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding: 2px 8px; border-radius: 10px; background: rgba(255,255,255,0.55); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); text-shadow: 0 1px 2px rgba(0,0,0,0.14); }
 
 @media (max-width: 900px) {
   #app { grid-template-columns: 80px 1fr; }
