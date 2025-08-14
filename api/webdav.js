@@ -5,7 +5,7 @@ module.exports = async function handler(req, res) {
   // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,PUT,DELETE,PROPFIND,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, Depth, Destination, Overwrite, If-Modified-Since, If-None-Match, If-Match, Range');
+  res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, Depth, Destination, Overwrite, If-Modified-Since, If-None-Match, If-Match, Range, x-dav-method');
 
   if (req.method === 'OPTIONS') {
     res.status(204).end();
@@ -43,8 +43,12 @@ module.exports = async function handler(req, res) {
       if (v !== undefined) forwardHeaders[key] = v;
     }
 
+    // Allow method override via x-dav-method (to bypass platforms blocking PROPFIND)
+    const override = (req.headers['x-dav-method'] || '').toString().toUpperCase();
+    const method = override || req.method;
+
     const upstream = await fetch(target, {
-      method: req.method,
+      method,
       headers: forwardHeaders,
       body
     });
@@ -57,7 +61,7 @@ module.exports = async function handler(req, res) {
     // Re-apply CORS headers
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET,PUT,DELETE,PROPFIND,OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, Depth, Destination, Overwrite, If-Modified-Since, If-None-Match, If-Match, Range');
+    res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, Depth, Destination, Overwrite, If-Modified-Since, If-None-Match, If-Match, Range, x-dav-method');
     res.send(buf);
   } catch (e) {
     res.status(502).json({ ok: false, error: String(e?.message || e) });

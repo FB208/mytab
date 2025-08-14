@@ -16,11 +16,15 @@ export class WebDAVClient {
 
   async ensureBase() {
     if (!this.url) throw new Error('未配置 WebDAV URL');
-    // 创建 mytab 目录（宽松处理）
-    const url = this.url;
-    const res = await davFetch(url, { method: 'PROPFIND', headers: { ...this.authHeader(), Depth: '1' } });
+    // 使用带 body 的 PROPFIND，更兼容部分实现
+    const body = `<?xml version="1.0" encoding="utf-8"?>
+<d:propfind xmlns:d="DAV:">
+  <d:prop>
+    <d:displayname/>
+  </d:prop>
+</d:propfind>`;
+    const res = await davFetch(this.url, { method: 'PROPFIND', headers: { 'Content-Type': 'application/xml; charset=utf-8', ...this.authHeader(), Depth: '1' }, body });
     if (res.status >= 400) throw new Error(`连接失败: ${res.status}`);
-    // 可选：尝试 MKCOL 子目录
     return true;
   }
 
@@ -130,7 +134,12 @@ function davFetch(targetUrl, options) {
   try {
     if (typeof window !== 'undefined' && window.__MYTAB_USE_PROXY__) {
       const api = `/api/webdav?url=${encodeURIComponent(targetUrl)}`;
-      return fetch(api, options);
+      const headers = { ...(options?.headers || {}) };
+      // 平台可能拦截 PROPFIND，这里用自定义头传给代理再覆盖 method
+      if (options && options.method && options.method.toUpperCase() === 'PROPFIND') {
+        headers['x-dav-method'] = 'PROPFIND';
+      }
+      return fetch(api, { ...options, headers });
     }
   } catch (e) {}
   return fetch(targetUrl, options);
