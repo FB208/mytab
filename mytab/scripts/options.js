@@ -1,4 +1,4 @@
-import { readAll, writeSettings, writeData } from './storage.js';
+import { readAll, writeSettings, writeData, DEFAULT_BG_URL } from './storage.js';
 
 const els = {
   url: document.getElementById('dav-url'),
@@ -27,7 +27,7 @@ async function init() {
   els.enabled.checked = !!settings.backup?.enabled;
   els.hours.value = settings.backup?.frequencyHours ?? 4;
   els.max.value = settings.backup?.maxSnapshots ?? 100;
-  els.bgUrl.value = data.backgroundImage || '';
+  els.bgUrl.value = (data.backgroundImage && data.backgroundImage.trim()) ? data.backgroundImage : DEFAULT_BG_URL;
 
   bind();
   await refreshList();

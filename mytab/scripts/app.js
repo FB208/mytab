@@ -1,4 +1,4 @@
-import { ensureInit, readAll, addFolder, renameFolder, deleteFolder, addSubfolder, renameSubfolder, deleteSubfolder, addBookmark, renameBookmark, deleteBookmark, buildFaviconUrl, updateBookmarkMono, updateBookmarkFavicon, updateBookmark, reorderBookmarksRelative, moveBookmark, updateBookmarkRemark } from './storage.js';
+import { ensureInit, readAll, addFolder, renameFolder, deleteFolder, addSubfolder, renameSubfolder, deleteSubfolder, addBookmark, renameBookmark, deleteBookmark, buildFaviconUrl, updateBookmarkMono, updateBookmarkFavicon, updateBookmark, reorderBookmarksRelative, moveBookmark, updateBookmarkRemark, DEFAULT_BG_URL } from './storage.js';
 
 let state = {
   selectedFolderId: null,
@@ -140,7 +140,8 @@ function renderSearchList(items) {
 async function render() {
   const { data } = await readAll();
   const bg = document.getElementById('bg');
-  bg.style.backgroundImage = data.backgroundImage ? `url(${data.backgroundImage})` : '';
+  const url = data.backgroundImage && data.backgroundImage.trim() ? data.backgroundImage : DEFAULT_BG_URL;
+  bg.style.backgroundImage = `url(${url})`;
   renderFolderList();
   renderSubfolders();
   renderBookmarkGrid();
