@@ -18,7 +18,7 @@ export class WebDAVClient {
     if (!this.url) throw new Error('未配置 WebDAV URL');
     // 创建 mytab 目录（宽松处理）
     const url = this.url;
-    const res = await fetch(url, { method: 'PROPFIND', headers: { ...this.authHeader(), Depth: '1' } });
+    const res = await davFetch(url, { method: 'PROPFIND', headers: { ...this.authHeader(), Depth: '1' } });
     if (res.status >= 400) throw new Error(`连接失败: ${res.status}`);
     // 可选：尝试 MKCOL 子目录
     return true;
@@ -33,7 +33,7 @@ export class WebDAVClient {
     <d:getcontentlength/>
   </d:prop>
 </d:propfind>`;
-    const res = await fetch(this.url, { method: 'PROPFIND', headers: { 'Content-Type': 'application/xml; charset=utf-8', ...this.authHeader(), Depth: '1' }, body });
+    const res = await davFetch(this.url, { method: 'PROPFIND', headers: { 'Content-Type': 'application/xml; charset=utf-8', ...this.authHeader(), Depth: '1' }, body });
     if (res.status >= 400) throw new Error(`列举失败: ${res.status}`);
     const text = await res.text();
     const entries = parsePropfind(text);
@@ -64,21 +64,21 @@ export class WebDAVClient {
 
   async uploadJSON(name, obj) {
     const url = this.url + encodeURIComponent(name);
-    const res = await fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...this.authHeader() }, body: JSON.stringify(obj) });
+    const res = await davFetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...this.authHeader() }, body: JSON.stringify(obj) });
     if (res.status >= 400) throw new Error(`上传失败: ${res.status}`);
     return true;
   }
 
   async downloadJSON(name) {
     const url = this.url + encodeURIComponent(name);
-    const res = await fetch(url, { method: 'GET', headers: { ...this.authHeader() } });
+    const res = await davFetch(url, { method: 'GET', headers: { ...this.authHeader() } });
     if (res.status >= 400) throw new Error(`下载失败: ${res.status}`);
     return await res.json();
   }
 
   async remove(name) {
     const url = this.url + encodeURIComponent(name);
-    const res = await fetch(url, { method: 'DELETE', headers: { ...this.authHeader() } });
+    const res = await davFetch(url, { method: 'DELETE', headers: { ...this.authHeader() } });
     if (res.status >= 400) throw new Error(`删除失败: ${res.status}`);
     return true;
   }
@@ -123,4 +123,15 @@ function decodeHtmlEntities(str) {
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'");
+}
+
+// 在网页模式下通过 Vercel 代理绕过 CORS；扩展模式直连
+function davFetch(targetUrl, options) {
+  try {
+    if (typeof window !== 'undefined' && window.__MYTAB_USE_PROXY__) {
+      const api = `/api/webdav?url=${encodeURIComponent(targetUrl)}`;
+      return fetch(api, options);
+    }
+  } catch (e) {}
+  return fetch(targetUrl, options);
 }

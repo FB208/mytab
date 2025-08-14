@@ -295,5 +295,8 @@
       scheduleAutoBackup();
     }
   });
+
+  // 在 Web 模式启用代理标记
+  try { window.__MYTAB_USE_PROXY__ = true; } catch (e) {}
 })();
 
