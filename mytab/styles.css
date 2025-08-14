@@ -41,7 +41,7 @@ body {
 }
 
 #bg { position: fixed; inset: 0; background: linear-gradient(180deg, #f9fbfd, #eef2f5); z-index: 0; background-position: center center; background-repeat: no-repeat; background-size: cover; }
-#bg::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: rgba(255,255,255,0.18); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+#bg::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: rgba(255,255,255,0.36); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); }
 
 #app { position: relative; z-index: 1; display: grid; grid-template-columns: 280px 1fr; height: 100vh; }
 

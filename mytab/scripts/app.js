@@ -272,7 +272,7 @@ async function renderBookmarkGrid() {
       const mono = el.querySelector('.mono-icon');
       img.style.display = 'none';
       mono.style.display = 'grid';
-      mono.style.background = 'rgba(78,168,222,0.22)';
+      // mono.style.background = 'rgba(78,168,222,0.22)';
       mono.querySelector('.letter').textContent = '📁';
       const titleEl = el.querySelector('.title');
       if (titleEl) titleEl.textContent = sub.name;
