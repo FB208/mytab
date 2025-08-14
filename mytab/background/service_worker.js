@@ -59,6 +59,8 @@ async function doBackup(source = 'manual') {
       delete cleanData.history; // 旧版残留清除
       // 兼容旧快照字段结构，确保不把 settings 写入
       if (cleanData.settings) delete cleanData.settings;
+      // 不上传本地缓存的图片数据，避免快照过大
+      try { stripIconDataUrls(cleanData); } catch (e) {}
     }
     const payload = { version: 1, ts: Date.now(), data: cleanData };
     await client.ensureBase();
@@ -131,6 +133,22 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   })();
   return true;
 });
+
+function stripIconDataUrls(data) {
+  if (!data || !Array.isArray(data.folders)) return;
+  data.folders.forEach(folder => {
+    if (Array.isArray(folder.bookmarks)) {
+      folder.bookmarks.forEach(b => { if (b && 'iconDataUrl' in b) delete b.iconDataUrl; });
+    }
+    if (Array.isArray(folder.subfolders)) {
+      folder.subfolders.forEach(sub => {
+        if (Array.isArray(sub.bookmarks)) {
+          sub.bookmarks.forEach(b => { if (b && 'iconDataUrl' in b) delete b.iconDataUrl; });
+        }
+      });
+    }
+  });
+}
 
 async function collectFaviconsInBg(pageUrl) {
   const u = new URL(pageUrl);

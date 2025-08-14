@@ -207,6 +207,7 @@ async function renderSubfolders() {
     const el = document.getElementById('tpl-subfolder-item').content.firstElementChild.cloneNode(true);
     el.dataset.id = sub.id;
     el.querySelector('.name').textContent = sub.name;
+    if (state.selectedSubId === sub.id) el.classList.add('active');
     // 作为拖拽目标：允许放置书签，移动到该二级文件夹
     el.addEventListener('dragover', (ev) => { ev.preventDefault(); ev.dataTransfer.dropEffect = 'move'; });
     el.addEventListener('drop', async (ev) => {
@@ -216,7 +217,14 @@ async function renderSubfolders() {
       const ok = await moveBookmark({ sourceFolderId: state.selectedFolderId, sourceSubId: state.selectedSubId, bookmarkId, targetFolderId: folder.id, targetSubId: sub.id });
       if (ok) { renderBookmarkGrid(); }
     });
-    el.addEventListener('click', () => { state.selectedSubId = sub.id; renderBookmarkGrid(); });
+    el.addEventListener('click', () => {
+      state.selectedSubId = sub.id;
+      // 更新头部为面包屑：一级 / 二级
+      const header = document.getElementById('current-folder-name');
+      if (header) header.textContent = `${folder.name} / ${sub.name}`;
+      renderSubfolders();
+      renderBookmarkGrid();
+    });
     el.querySelector('.rename').addEventListener('click', async (e) => {
       e.stopPropagation();
       const name = await textPrompt({ title: '重命名', placeholder: sub.name, value: sub.name });
@@ -225,7 +233,16 @@ async function renderSubfolders() {
     el.querySelector('.delete').addEventListener('click', async (e) => {
       e.stopPropagation();
       const ok = await confirmPrompt('删除该二级文件夹？');
-      if (ok) { await deleteSubfolder(folder.id, sub.id); if (state.selectedSubId === sub.id) state.selectedSubId = null; renderSubfolders(); renderBookmarkGrid(); }
+      if (ok) {
+        await deleteSubfolder(folder.id, sub.id);
+        if (state.selectedSubId === sub.id) {
+          state.selectedSubId = null;
+          const header = document.getElementById('current-folder-name');
+          if (header) header.textContent = folder.name;
+        }
+        renderSubfolders();
+        renderBookmarkGrid();
+      }
     });
     wrap.appendChild(el);
   });
@@ -241,6 +258,30 @@ async function renderBookmarkGrid() {
   const list = (container?.bookmarks || []).filter(bm => matchKeyword(bm, state.keyword));
 
   const tpl = document.getElementById('tpl-bookmark-card');
+  // 如果在二级文件夹内，插入一个“返回上级”的虚拟书签作为第一项
+  if (state.selectedSubId) {
+    const backEl = tpl.content.firstElementChild.cloneNode(true);
+    backEl.dataset.id = 'back';
+    backEl.title = '返回上级';
+    const img = backEl.querySelector('.favicon');
+    const mono = backEl.querySelector('.mono-icon');
+    img.style.display = 'none';
+    mono.style.display = 'grid';
+    mono.style.background = '#94a3b8';
+    mono.querySelector('.letter').textContent = '↩';
+    const titleEl = backEl.querySelector('.title');
+    if (titleEl) titleEl.textContent = '返回上级';
+    backEl.addEventListener('click', () => {
+      state.selectedSubId = null;
+      const header = document.getElementById('current-folder-name');
+      if (header) header.textContent = folder.name;
+      renderSubfolders();
+      renderBookmarkGrid();
+    });
+    // 返回项不参与拖拽
+    backEl.setAttribute('draggable', 'false');
+    grid.appendChild(backEl);
+  }
   list.forEach(bm => {
     const el = tpl.content.firstElementChild.cloneNode(true);
     el.dataset.id = bm.id;
@@ -268,9 +309,16 @@ async function renderBookmarkGrid() {
     const img = el.querySelector('.favicon');
     const mono = el.querySelector('.mono-icon');
     if (bm.iconType === 'favicon' && bm.iconUrl) {
-      img.src = bm.iconUrl;
+      img.src = bm.iconDataUrl || bm.iconUrl;
       img.style.display = 'block';
       mono.style.display = 'none';
+      img.onload = () => {
+        if (!bm.iconDataUrl && bm.iconUrl) {
+          imageToDataUrl(bm.iconUrl).then((dataUrl) => {
+            if (dataUrl) updateBookmark({ folderId: folder.id, subId: state.selectedSubId, bookmarkId: bm.id, url: bm.url, name: bm.name, iconType: 'favicon', iconUrl: bm.iconUrl, iconDataUrl: dataUrl });
+          }).catch(() => {});
+        }
+      };
       img.onerror = async () => {
         // 自动降级为单色图标并持久化
         const letter = (bm.name || bm.url || 'W')[0] || 'W';
@@ -444,6 +492,7 @@ const modal = {
 };
 
 let modalCtx = { mode: 'add', bookmarkId: null, folderId: null, subId: null };
+let modalFavCandidates = [];
 
 function openBookmarkModal({ mode, bookmark = null, folderId = null, subId = null }) {
   modalCtx = { mode, bookmarkId: bookmark?.id || null, folderId: folderId || state.selectedFolderId, subId: subId || state.selectedSubId };
@@ -513,8 +562,9 @@ modal.save?.addEventListener('click', async () => {
   const mode = getIconMode();
   if (modalCtx.mode === 'add') {
     if (mode === 'favicon') {
-      const iconUrl = modal.favUrl.value.trim() || buildFaviconUrl(url);
-      await addBookmark({ folderId, subId, url, name, iconUrl, mono: null, remark });
+      const iconUrl = modal.favUrl.value.trim() || modalFavCandidates[0] || buildFaviconUrl(url);
+      const iconDataUrl = iconUrl ? await toDataUrlSafe(iconUrl) : '';
+      await addBookmark({ folderId, subId, url, name, iconUrl, iconDataUrl, mono: null, remark });
     } else {
       const letter = (modal.letter.value || (name || url || 'W')[0] || 'W').toUpperCase();
       const color = modal.color.value || pickColorFromString(letter);
@@ -523,8 +573,9 @@ modal.save?.addEventListener('click', async () => {
   } else {
     const bookmarkId = modalCtx.bookmarkId;
     if (mode === 'favicon') {
-      const iconUrl = modal.favUrl.value.trim();
-      await updateBookmark({ folderId, subId, bookmarkId, url, name, iconType: 'favicon', iconUrl: iconUrl || undefined });
+      const iconUrl = modal.favUrl.value.trim() || modalFavCandidates[0] || undefined;
+      const iconDataUrl = iconUrl ? await toDataUrlSafe(iconUrl) : '';
+      await updateBookmark({ folderId, subId, bookmarkId, url, name, iconType: 'favicon', iconUrl, iconDataUrl });
     } else {
       const letter = (modal.letter.value || (name || url || 'W')[0] || 'W').toUpperCase();
       const color = modal.color.value || '#7c5cff';
@@ -587,8 +638,11 @@ function refreshPreview() {
     modal.previewFav.style.display = 'block';
     modal.previewMono.style.display = 'none';
     const url = modal.url.value.trim();
-    const fav = modal.favUrl.value.trim() || (url ? buildFaviconUrl(url) : '');
-    modal.previewFav.src = fav;
+    const manual = modal.favUrl.value.trim();
+    const fav = manual || (modalFavCandidates && modalFavCandidates[0]) || (url ? buildFaviconUrl(url) : '');
+    if (fav) modal.previewFav.src = fav;
+    // 如果已有缓存图（dataURL），优先使用
+    // 预览阶段不读取缓存，保存时写入；显示阶段会用缓存
   } else {
     modal.previewFav.style.display = 'none';
     modal.previewMono.style.display = 'grid';
@@ -607,6 +661,7 @@ function clearFavCandidates() {
 function renderFavCandidates(urls) {
   clearFavCandidates();
   if (!urls || urls.length === 0) return;
+  modalFavCandidates = urls;
   modal.favCandidatesWrap?.classList.remove('hidden');
   urls.forEach(u => {
     const item = document.createElement('div');
@@ -621,6 +676,10 @@ function renderFavCandidates(urls) {
     });
     modal.favCandidates.appendChild(item);
   });
+  // 自动预览第一个候选（若未手填）
+  if (getIconMode() === 'favicon' && !modal.favUrl.value.trim() && urls[0]) {
+    modal.previewFav.src = urls[0];
+  }
 }
 
 async function collectFavicons(pageUrl) {
@@ -657,6 +716,37 @@ function testImageLoad(url) {
     const done = (ok) => { resolve(ok ? url : null); };
     img.onload = () => done(true);
     img.onerror = () => done(false);
+    img.src = url + (url.includes('?') ? `&t=${Date.now()}` : `?t=${Date.now()}`);
+  });
+}
+
+async function toDataUrlSafe(url) {
+  try {
+    const res = await fetch(url, { mode: 'no-cors' });
+    // no-cors 响应可能是 opaque，直接读取会失败；退化到 <img> 画布
+  } catch (e) {}
+  return await imageToDataUrl(url).catch(() => '');
+}
+
+function imageToDataUrl(url) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        const size = 64;
+        canvas.width = size; canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0,0,size,size);
+        // draw contain
+        const ratio = Math.min(size / img.width, size / img.height);
+        const w = img.width * ratio; const h = img.height * ratio;
+        ctx.drawImage(img, (size - w)/2, (size - h)/2, w, h);
+        resolve(canvas.toDataURL('image/png'));
+      } catch (err) { reject(err); }
+    };
+    img.onerror = reject;
     img.src = url + (url.includes('?') ? `&t=${Date.now()}` : `?t=${Date.now()}`);
   });
 }

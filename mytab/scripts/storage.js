@@ -128,12 +128,12 @@ export async function deleteSubfolder(folderId, subId) {
   }
 }
 
-export async function addBookmark({ folderId, subId, url, name, iconUrl, mono, remark }) {
+export async function addBookmark({ folderId, subId, url, name, iconUrl, iconDataUrl, mono, remark }) {
   const data = await readData();
   const target = locateContainer(data, folderId, subId);
   if (!target) return null;
   const title = name || guessTitleFromUrl(url);
-  const bookmark = { id: generateId('b'), url, name: title, iconType: iconUrl ? 'favicon' : 'mono', iconUrl: iconUrl || '', mono: mono || null, remark: remark || '' };
+  const bookmark = { id: generateId('b'), url, name: title, iconType: iconUrl ? 'favicon' : 'mono', iconUrl: iconUrl || '', iconDataUrl: iconDataUrl || '', mono: mono || null, remark: remark || '' };
   target.bookmarks = target.bookmarks || [];
   target.bookmarks.push(bookmark);
   data.lastModified = Date.now();
@@ -192,15 +192,15 @@ export async function updateBookmarkFavicon({ folderId, subId, bookmarkId, iconU
   notifyChanged();
 }
 
-export async function updateBookmark({ folderId, subId, bookmarkId, url, name, iconType, iconUrl, mono }) {
+export async function updateBookmark({ folderId, subId, bookmarkId, url, name, iconType, iconUrl, iconDataUrl, mono }) {
   const data = await readData();
   const target = locateContainer(data, folderId, subId);
   const bm = target?.bookmarks?.find(b => b.id === bookmarkId);
   if (!bm) return;
   if (url !== undefined) bm.url = url;
   if (name !== undefined) bm.name = name;
-  if (iconType === 'favicon') { bm.iconType = 'favicon'; bm.iconUrl = iconUrl || buildFaviconUrl(bm.url); bm.mono = null; }
-  if (iconType === 'mono') { bm.iconType = 'mono'; bm.iconUrl = ''; bm.mono = mono || bm.mono; }
+  if (iconType === 'favicon') { bm.iconType = 'favicon'; bm.iconUrl = iconUrl || buildFaviconUrl(bm.url); if (iconDataUrl !== undefined) bm.iconDataUrl = iconDataUrl || ''; bm.mono = null; }
+  if (iconType === 'mono') { bm.iconType = 'mono'; bm.iconUrl = ''; bm.iconDataUrl = ''; bm.mono = mono || bm.mono; }
   data.lastModified = Date.now();
   await writeData(data);
   notifyChanged();

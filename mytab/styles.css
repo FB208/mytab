@@ -33,7 +33,8 @@ body {
   background: var(--bg);
 }
 
-#bg { position: fixed; inset: 0; background: linear-gradient(180deg, #f9fbfd, #eef2f5); z-index: 0; }
+#bg { position: fixed; inset: 0; background: linear-gradient(180deg, #f9fbfd, #eef2f5); z-index: 0; background-position: center center; background-repeat: no-repeat; background-size: cover; }
+#bg::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: rgba(255,255,255,0.18); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
 
 #app { position: relative; z-index: 1; display: grid; grid-template-columns: 280px 1fr; height: 100vh; }
 
@@ -73,6 +74,7 @@ body {
 
 .subfolders { display:flex; gap: 12px; flex-wrap: wrap; }
 .subfolder-item { display:flex; align-items:center; justify-content: space-between; gap: 10px; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--surface); box-shadow: var(--shadow-dark-sm), var(--shadow-light-sm); }
+.subfolder-item.active { outline: 3px solid var(--primary-ghost); background: linear-gradient(145deg, #ffffff, #e9eef3); box-shadow: 0 0 0 2px rgba(78,168,222,0.15), var(--shadow-dark-sm), var(--shadow-light-sm); }
 .subfolder-item .left { display:flex; align-items:center; gap: 10px; }
 .subfolder-item .icon { width: 24px; height: 24px; display:grid; place-items:center; }
 .subfolder-item .name { font-weight: 600; }
