@@ -1,0 +1,7 @@
+{
+  "rewrites": [
+    { "source": "/", "destination": "/mytab/index.html" },
+    { "source": "/options", "destination": "/mytab/options.html" }
+  ]
+}
+
