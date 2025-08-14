@@ -39,8 +39,6 @@
 
       <div class="tools-floating">
         <input id="search" class="search" placeholder="搜索书签..." />
-        <button id="btn-add-bookmark" class="primary-btn">＋ 添加书签</button>
-        <button id="btn-add-subfolder" class="ghost-btn">＋ 二级文件夹</button>
       </div>
 
       <section class="subfolders" id="subfolder-list"></section>
@@ -190,6 +188,28 @@
           <button id="search-close" class="icon-btn">✕</button>
         </div>
         <div id="search-list" class="search-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 添加项选择弹窗 -->
+  <div id="choice-modal" class="modal hidden">
+    <div class="panel glass" style="width: 420px;">
+      <div class="inner">
+        <div style="display:flex; align-items:center; justify-content: space-between;">
+          <h3 style="margin: 6px 0 12px 0;">选择要添加的类型</h3>
+          <button id="cm-close" class="icon-btn">✕</button>
+        </div>
+        <div class="choice-buttons">
+          <button id="cm-btn-bookmark" class="choice-btn">
+            <span class="icon">🔖</span>
+            <span class="text">书签</span>
+          </button>
+          <button id="cm-btn-folder" class="choice-btn">
+            <span class="icon">📁</span>
+            <span class="text">文件夹</span>
+          </button>
+        </div>
       </div>
     </div>
   </div>

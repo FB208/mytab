@@ -102,22 +102,33 @@ async function refreshList() {
     }
     items.forEach(item => {
       const li = document.createElement('li');
-      const dt = new Date(item.lastmod);
       li.className = 'glass';
-      li.style.padding = '10px 12px';
-      li.style.display = 'flex';
-      li.style.justifyContent = 'space-between';
-      li.style.alignItems = 'center';
-      li.innerHTML = `<span>${item.name}</span><span style="opacity:.7">${dt.toLocaleString()}</span>`;
+
+      const nameSpan = document.createElement('span');
+      nameSpan.textContent = item.name;
+
+      const footerDiv = document.createElement('div');
+      footerDiv.className = 'backup-item-footer';
+
+      const dateSpan = document.createElement('span');
+      dateSpan.className = 'backup-date';
+      dateSpan.textContent = new Date(item.lastmod).toLocaleString();
+
       const btn = document.createElement('button');
-      btn.className = 'mini-btn';
+      btn.className = 'mini-btn restore-btn';
       btn.textContent = '恢复';
       btn.addEventListener('click', async () => {
         if (!confirm('确认从该快照恢复？')) return;
         const r = await chrome.runtime.sendMessage({ type: 'backup:restore', name: item.name });
         if (r?.ok) alert('已恢复'); else alert('恢复失败: ' + (r?.error || ''));
       });
-      li.appendChild(btn);
+
+      footerDiv.appendChild(dateSpan);
+      footerDiv.appendChild(btn);
+      
+      li.appendChild(nameSpan);
+      li.appendChild(footerDiv);
+
       els.list.appendChild(li);
     });
   } catch (e) {

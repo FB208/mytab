@@ -39,19 +39,6 @@ function bindEvents() {
     render();
   });
 
-  document.getElementById('btn-add-subfolder').addEventListener('click', async () => {
-    if (!state.selectedFolderId) return toast('请先选择一个一级文件夹');
-    const name = await textPrompt({ title: '新建二级文件夹', placeholder: '二级文件夹名称' });
-    if (!name) return;
-    await addSubfolder(state.selectedFolderId, name);
-    render();
-  });
-
-  document.getElementById('btn-add-bookmark').addEventListener('click', async () => {
-    if (!state.selectedFolderId) return alert('请先选择一个一级文件夹');
-    openBookmarkModal({ mode: 'add' });
-  });
-
   document.getElementById('search').addEventListener('input', (e) => {
     state.keyword = e.target.value.trim();
     renderBookmarkGrid();
@@ -323,7 +310,7 @@ async function renderBookmarkGrid() {
     const mono = backEl.querySelector('.mono-icon');
     img.style.display = 'none';
     mono.style.display = 'grid';
-    mono.style.background = '#94a3b8';
+    mono.style.background = '#d1d5db';
     mono.querySelector('.letter').textContent = '↩';
     const titleEl = backEl.querySelector('.title');
     if (titleEl) titleEl.textContent = '返回上级';
@@ -398,6 +385,48 @@ async function renderBookmarkGrid() {
     });
     grid.appendChild(el);
   });
+
+  // Add the virtual "Add New" card
+  if (state.selectedFolderId) {
+    const addEl = tpl.content.firstElementChild.cloneNode(true);
+    addEl.id = 'btn-add-new-item';
+    addEl.title = '添加书签或文件夹';
+    
+    const title = addEl.querySelector('.title');
+    const img = addEl.querySelector('.favicon');
+    const mono = addEl.querySelector('.mono-icon');
+
+    if (title) title.textContent = '添加';
+    if (img) img.style.display = 'none';
+    
+    if (mono) {
+      mono.style.display = 'grid';
+      mono.style.background = '#d1d5db'; // A neutral gray color
+      const letter = mono.querySelector('.letter');
+      if (letter) letter.textContent = '+';
+    }
+
+    addEl.setAttribute('draggable', 'false');
+    addEl.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    addEl.addEventListener('click', async () => {
+      const choice = await choicePrompt();
+      if (!choice) return;
+
+      if (choice === 'bookmark') {
+        openBookmarkModal({ mode: 'add' });
+      } else if (choice === 'folder') {
+        if (!state.selectedFolderId) return toast('请先选择一个一级文件夹');
+        const name = await textPrompt({ title: '新建文件夹', placeholder: '文件夹名称' });
+        if (name) {
+          await addSubfolder(state.selectedFolderId, name);
+          render();
+        }
+      }
+    });
+
+    grid.appendChild(addEl);
+  }
 }
 
 function matchKeyword(bm, kw) {
@@ -496,6 +525,31 @@ async function confirmPrompt(message) {
     btnClose.onclick = () => cleanup(false);
     btnCancel.onclick = () => cleanup(false);
     btnSave.onclick = () => cleanup(true);
+  });
+}
+
+// 选择弹窗
+async function choicePrompt() {
+  const root = document.getElementById('choice-modal');
+  const backdrop = document.getElementById('modal-backdrop');
+  const btnBookmark = document.getElementById('cm-btn-bookmark');
+  const btnFolder = document.getElementById('cm-btn-folder');
+  const btnClose = document.getElementById('cm-close');
+
+  return new Promise((resolve) => {
+    root.classList.remove('hidden');
+    backdrop.classList.remove('hidden');
+
+    const cleanup = (val) => {
+      root.classList.add('hidden');
+      backdrop.classList.add('hidden');
+      btnBookmark.onclick = btnFolder.onclick = btnClose.onclick = null;
+      resolve(val);
+    };
+
+    btnClose.onclick = () => cleanup(null);
+    btnBookmark.onclick = () => cleanup('bookmark');
+    btnFolder.onclick = () => cleanup('folder');
   });
 }
 
