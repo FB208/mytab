@@ -58,6 +58,22 @@ function bindEvents() {
     triggerGlobalSearch(state.keyword);
   });
 
+  // Mobile sidebar toggle
+  const app = document.getElementById('app');
+  const toggleBtn = document.getElementById('btn-toggle-sidebar');
+  const mainContent = document.querySelector('.content');
+
+  toggleBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    app.classList.toggle('sidebar-visible');
+  });
+
+  mainContent?.addEventListener('click', () => {
+    if (app.classList.contains('sidebar-visible')) {
+      app.classList.remove('sidebar-visible');
+    }
+  });
+
 // 全局搜索弹窗
 const searchModal = {
   root: document.getElementById('search-modal'),

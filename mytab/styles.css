@@ -85,6 +85,22 @@ body {
 
 .content { padding: 16px 16px 32px 0; display:flex; flex-direction: column; gap: 12px; position: relative; }
 .content-header { display:flex; align-items:center; justify-content: flex-start; padding: 10px 16px 8px 16px; gap: 12px; border-radius: 0; background: transparent; box-shadow: none; border-bottom: 1px solid rgba(15,23,42,0.06); }
+.content-header .left { display: flex; align-items: center; }
+
+#btn-toggle-sidebar {
+  display: none; /* Hidden by default on desktop */
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  box-shadow: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text);
+}
+
 .content-header .right { display:flex; align-items:center; gap: 12px; }
 .search { background: var(--surface); color: var(--text); border: none; border-radius: var(--ctl-radius); padding: 0 16px; min-width: 280px; box-shadow: var(--shadow-dark-sm), var(--shadow-light-sm); height: var(--ctl-height); line-height: var(--ctl-height); -webkit-appearance: none; }
 .search::placeholder { color: var(--text-dim); }
@@ -192,4 +208,80 @@ body {
 @media (max-width: 720px) {
   .options-grid-2 { grid-template-columns: 1fr; }
   .options-app { padding: 16px; }
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+  #app {
+    display: block;
+  }
+
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 280px;
+    max-width: 85%;
+    margin: 0;
+    border-radius: 0 16px 16px 0;
+    z-index: 1000;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease-in-out;
+    box-shadow: 0 0 40px rgba(0,0,0,0.2);
+  }
+
+  #app.sidebar-visible .sidebar {
+    transform: translateX(0);
+  }
+
+  .content {
+    padding: 16px;
+  }
+
+  .tools-floating {
+    position: static;
+    padding: 0 16px;
+    width: 100%;
+    margin-bottom: 16px;
+  }
+
+  .content-header {
+    padding: 10px 0 8px 0;
+  }
+
+  #btn-toggle-sidebar {
+    display: flex; /* Show on mobile */
+    margin-right: 10px;
+  }
+
+  /* Hide text on folder items in sidebar to save space, similar to 900px breakpoint */
+  .sidebar .folder-item .name, .sidebar .brand {
+    display: block; /* Re-show them in the slide-out menu */
+  }
+
+  /* Adjust bookmark grid for smaller screens */
+  .bookmark-grid {
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 16px;
+  }
+
+  /* Options Page Responsive */
+  .options-app {
+    padding: 16px;
+  }
+  .options-grid-2 {
+    grid-template-columns: 1fr;
+  }
+  .options-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .options-row > .search,
+  .options-row > .primary-btn,
+  .options-row > .ghost-btn {
+    width: 100%;
+    justify-content: center;
+  }
 }
