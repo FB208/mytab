@@ -1,6 +1,6 @@
 // 数据与存储层
 
-export const DEFAULT_BG_URL = '/mytab/default_bg.png';
+export const DEFAULT_BG_URL = 'https://qiniu.markup.com.cn/20250814195424790.jpg';
 
 export const DEFAULT_DATA = {
   folders: [],
