@@ -128,12 +128,12 @@ export async function deleteSubfolder(folderId, subId) {
   }
 }
 
-export async function addBookmark({ folderId, subId, url, name, iconUrl, mono }) {
+export async function addBookmark({ folderId, subId, url, name, iconUrl, mono, remark }) {
   const data = await readData();
   const target = locateContainer(data, folderId, subId);
   if (!target) return null;
   const title = name || guessTitleFromUrl(url);
-  const bookmark = { id: generateId('b'), url, name: title, iconType: iconUrl ? 'favicon' : 'mono', iconUrl: iconUrl || '', mono: mono || null };
+  const bookmark = { id: generateId('b'), url, name: title, iconType: iconUrl ? 'favicon' : 'mono', iconUrl: iconUrl || '', mono: mono || null, remark: remark || '' };
   target.bookmarks = target.bookmarks || [];
   target.bookmarks.push(bookmark);
   data.lastModified = Date.now();
@@ -201,6 +201,17 @@ export async function updateBookmark({ folderId, subId, bookmarkId, url, name, i
   if (name !== undefined) bm.name = name;
   if (iconType === 'favicon') { bm.iconType = 'favicon'; bm.iconUrl = iconUrl || buildFaviconUrl(bm.url); bm.mono = null; }
   if (iconType === 'mono') { bm.iconType = 'mono'; bm.iconUrl = ''; bm.mono = mono || bm.mono; }
+  data.lastModified = Date.now();
+  await writeData(data);
+  notifyChanged();
+}
+
+export async function updateBookmarkRemark({ folderId, subId, bookmarkId, remark }) {
+  const data = await readData();
+  const target = locateContainer(data, folderId, subId);
+  const bm = target?.bookmarks?.find(b => b.id === bookmarkId);
+  if (!bm) return;
+  bm.remark = remark || '';
   data.lastModified = Date.now();
   await writeData(data);
   notifyChanged();

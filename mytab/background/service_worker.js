@@ -16,7 +16,8 @@ chrome.storage.onChanged.addListener(async (changes, area) => {
   }
   // 数据变化触发节流备份
   if (area === 'local' && changes.data) {
-    scheduleBackup();
+    // 将来源标记为 auto（操作型）
+    scheduleBackup('auto');
   }
 });
 
@@ -37,9 +38,11 @@ async function ensureAlarm() {
 }
 
 let backupTimer = null;
-function scheduleBackup() {
+let backupSource = 'auto';
+function scheduleBackup(source = 'auto') {
   clearTimeout(backupTimer);
-  backupTimer = setTimeout(() => doBackup('auto'), 4000); // 4 秒防抖
+  backupSource = source;
+  backupTimer = setTimeout(() => doBackup(backupSource), 4000); // 4 秒防抖
 }
 
 async function doBackup(source = 'manual') {
@@ -47,7 +50,9 @@ async function doBackup(source = 'manual') {
     const { data, settings } = await readAll();
     if (!settings?.webdav?.url) return;
     const client = new WebDAVClient(settings.webdav);
-    const name = `snapshot_${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+    const prefixMap = { alarm: 'snapshot_schedule', manual: 'snapshot_user', auto: 'snapshot_handle' };
+    const prefix = prefixMap[source] || 'snapshot_user';
+    const name = `${prefix}_${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
     // 在 worker 内避免被缓存污染：重新读取并深拷贝
     const cleanData = JSON.parse(JSON.stringify(data || {}));
     if (cleanData && typeof cleanData === 'object') {
@@ -88,7 +93,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         return;
       }
       if (msg?.type === 'backup:manual') {
-        await doBackup('manual');
+        const src = msg?.source || 'manual';
+        await doBackup(src);
         sendResponse({ ok: true });
         return;
       }

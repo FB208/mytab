@@ -1,4 +1,4 @@
-import { ensureInit, readAll, addFolder, renameFolder, deleteFolder, addSubfolder, renameSubfolder, deleteSubfolder, addBookmark, renameBookmark, deleteBookmark, buildFaviconUrl, updateBookmarkMono, updateBookmarkFavicon, updateBookmark, reorderBookmarksRelative, moveBookmark } from './storage.js';
+import { ensureInit, readAll, addFolder, renameFolder, deleteFolder, addSubfolder, renameSubfolder, deleteSubfolder, addBookmark, renameBookmark, deleteBookmark, buildFaviconUrl, updateBookmarkMono, updateBookmarkFavicon, updateBookmark, reorderBookmarksRelative, moveBookmark, updateBookmarkRemark } from './storage.js';
 
 let state = {
   selectedFolderId: null,
@@ -14,6 +14,11 @@ chrome.runtime.onMessage.addListener((msg) => {
     render();
   }
 });
+
+// 监听所有操作以触发“操作型自动备份”
+async function recordHandleBackup() {
+  try { await chrome.runtime.sendMessage({ type: 'backup:manual', source: 'auto' }); } catch (e) {}
+}
 
 async function bootstrap() {
   bindEvents();
@@ -239,7 +244,7 @@ async function renderBookmarkGrid() {
   list.forEach(bm => {
     const el = tpl.content.firstElementChild.cloneNode(true);
     el.dataset.id = bm.id;
-    el.title = bm.name || bm.url;
+    el.title = bm.remark ? `${bm.name || bm.url}\n${bm.remark}` : (bm.name || bm.url);
     const titleEl = el.querySelector('.title');
     if (titleEl) titleEl.textContent = bm.name || bm.url;
     // 拖拽属性
@@ -424,6 +429,7 @@ const modal = {
   save: document.getElementById('modal-save'),
   url: document.getElementById('bm-url'),
   name: document.getElementById('bm-name'),
+  remark: document.getElementById('bm-remark'),
   favUrl: document.getElementById('bm-favicon'),
   fetchFav: document.getElementById('bm-fetch-fav'),
   favCandidatesWrap: document.getElementById('row-fav-candidates'),
@@ -444,6 +450,7 @@ function openBookmarkModal({ mode, bookmark = null, folderId = null, subId = nul
   modal.title.textContent = mode === 'add' ? '添加书签' : '编辑书签';
   modal.url.value = bookmark?.url || '';
   modal.name.value = bookmark?.name || '';
+  modal.remark.value = bookmark?.remark || '';
   const iconType = bookmark?.iconType || 'favicon';
   modal.modeRadios().forEach(r => r.checked = r.value === iconType);
   modal.favUrl.value = bookmark?.iconUrl || '';
@@ -502,15 +509,16 @@ modal.save?.addEventListener('click', async () => {
   const url = modal.url.value.trim();
   if (!url) { alert('请输入网址'); return; }
   const name = modal.name.value.trim() || undefined;
+  const remark = modal.remark.value.trim() || '';
   const mode = getIconMode();
   if (modalCtx.mode === 'add') {
     if (mode === 'favicon') {
       const iconUrl = modal.favUrl.value.trim() || buildFaviconUrl(url);
-      await addBookmark({ folderId, subId, url, name, iconUrl, mono: null });
+      await addBookmark({ folderId, subId, url, name, iconUrl, mono: null, remark });
     } else {
       const letter = (modal.letter.value || (name || url || 'W')[0] || 'W').toUpperCase();
       const color = modal.color.value || pickColorFromString(letter);
-      await addBookmark({ folderId, subId, url, name, iconUrl: '', mono: { letter, color } });
+      await addBookmark({ folderId, subId, url, name, iconUrl: '', mono: { letter, color }, remark });
     }
   } else {
     const bookmarkId = modalCtx.bookmarkId;
@@ -522,6 +530,8 @@ modal.save?.addEventListener('click', async () => {
       const color = modal.color.value || '#7c5cff';
       await updateBookmark({ folderId, subId, bookmarkId, url, name, iconType: 'mono', mono: { letter, color } });
     }
+    // 同步备注
+    await updateBookmarkRemark({ folderId, subId, bookmarkId, remark });
   }
   showModal(false);
   renderBookmarkGrid();
