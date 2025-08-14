@@ -54,11 +54,11 @@ body {
 .icon-btn:hover { box-shadow: 0 0 0 rgba(0,0,0,0), var(--shadow-light-sm), var(--shadow-dark-sm); }
 .icon-btn:active { box-shadow: inset var(--shadow-dark-sm), inset var(--shadow-light-sm); }
  /* 设置按钮的样式*/
- #btn-settings{ background: none; border: none; box-shadow: none; padding: 0; width: 36px; height: 36px; font-size: 20px; display: grid; place-items: center; border-radius: 10px; cursor: pointer; color: var(--primary); position: relative; }
- #btn-settings::after{ content: ""; position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(closest-side, rgba(78,168,222,0.22), rgba(78,168,222,0)); transform: scale(.8); opacity: 0; transition: opacity .18s ease, transform .18s ease; pointer-events: none; }
- #btn-settings:hover{ background: none; box-shadow: none; transform: rotate(12deg); opacity: 1; }
- #btn-settings:hover::after{ opacity: 1; transform: scale(1); }
- #btn-settings:active{ background: none; box-shadow: none; transform: rotate(0deg) scale(.96); opacity: .95; }
+ #btn-settings{ background: transparent; border: 1px solid rgba(255,255,255,0.45); box-shadow: none; padding: 0; width: 36px; height: 36px; font-size: 20px; display: flex; align-items: center; justify-content: center; line-height: 1; border-radius: 50%; cursor: pointer; color: var(--primary); position: relative; transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); }
+ #btn-settings::before{ content: ""; position: absolute; inset: 3px; border-radius: 50%; background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.45), rgba(255,255,255,0)); pointer-events: none; }
+ #btn-settings::after{ content: ""; position: absolute; inset: 0; border-radius: 50%; padding: 1px; background: linear-gradient(145deg, rgba(255,255,255,0.9), rgba(15,23,42,0.10)); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; opacity: 1; transition: opacity .18s ease, transform .18s ease; pointer-events: none; }
+ #btn-settings:hover{ transform: scale(1.15) rotate(15deg); opacity: 1; }
+ #btn-settings:active{ transform: scale(.97); opacity: 1; }
 
 .folder-list { display: flex; flex-direction: column; gap: 10px; overflow-y: auto; overflow-x: visible; padding: 6px; padding-top:12px; border-radius: var(--radius-md); }
 .folder-item { position: relative; display:flex; align-items:center; gap:10px; padding:0 12px; height: var(--ctl-height); margin: 2px 6px; border-radius: var(--ctl-radius); cursor:pointer; transition: transform .15s ease, box-shadow .15s ease, background .15s ease; box-shadow: var(--shadow-dark-sm), var(--shadow-light-sm); overflow: hidden; }
