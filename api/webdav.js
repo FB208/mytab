@@ -45,6 +45,7 @@ module.exports = async function handler(req, res) {
 
     // Allow method override via x-dav-method (to bypass platforms blocking PROPFIND)
     const override = (req.headers['x-dav-method'] || '').toString().toUpperCase();
+    // 若前端为绕过平台限制而把 PROPFIND 包装成 POST，这里改回真实方法
     const method = override || req.method;
 
     const upstream = await fetch(target, {

@@ -23,9 +23,15 @@ export class WebDAVClient {
     <d:displayname/>
   </d:prop>
 </d:propfind>`;
-    const res = await davFetch(this.url, { method: 'PROPFIND', headers: { 'Content-Type': 'application/xml; charset=utf-8', ...this.authHeader(), Depth: '1' }, body });
-    if (res.status >= 400) throw new Error(`连接失败: ${res.status}`);
-    return true;
+    try {
+      const res = await davFetch(this.url, { method: 'PROPFIND', headers: { 'Accept': '*/*', 'Content-Type': 'application/xml; charset=utf-8', ...this.authHeader(), Depth: '1' }, body });
+      if (res.status < 400) return true;
+      // 若 PROPFIND 不被允许，回退到写入探针文件测试写权限
+      return await this.probeWrite();
+    } catch (e) {
+      // 回退到写入探针文件测试写权限
+      return await this.probeWrite();
+    }
   }
 
   async list() {
@@ -37,33 +43,38 @@ export class WebDAVClient {
     <d:getcontentlength/>
   </d:prop>
 </d:propfind>`;
-    const res = await davFetch(this.url, { method: 'PROPFIND', headers: { 'Content-Type': 'application/xml; charset=utf-8', ...this.authHeader(), Depth: '1' }, body });
-    if (res.status >= 400) throw new Error(`列举失败: ${res.status}`);
-    const text = await res.text();
-    const entries = parsePropfind(text);
-    if (!entries || entries.length === 0) return [];
-    // 识别目录自身的 href（通常是最短的那一条）
-    const sortedByHrefLen = [...entries].filter(e => e.href).sort((a,b) => (a.href.length||0) - (b.href.length||0));
-    const baseHref = sortedByHrefLen[0]?.href || '';
-    const items = entries
-      .filter(it => (it.href || '') !== baseHref)
-      .map(it => {
-        const href = decodeURIComponent(it.href || '');
-        let name = '';
-        if (href && baseHref && href.startsWith(baseHref)) {
-          name = href.slice(baseHref.length);
-        } else {
-          const parts = href.split('/').filter(Boolean);
-          name = parts.pop() || '';
-        }
-        name = name.replace(/\/$/, '');
-        const lastmod = it.lastmod;
-        const size = it.size;
-        return { name, lastmod, size };
-      })
-      .filter(it => it.name && it.name.toLowerCase().endsWith('.json'))
-      .sort((a,b) => b.lastmod - a.lastmod);
-    return items;
+    try {
+      const res = await davFetch(this.url, { method: 'PROPFIND', headers: { 'Accept': '*/*', 'Content-Type': 'application/xml; charset=utf-8', ...this.authHeader(), Depth: '1' }, body });
+      if (res.status >= 400) throw new Error(`列举失败: ${res.status}`);
+      const text = await res.text();
+      const entries = parsePropfind(text);
+      if (!entries || entries.length === 0) return [];
+      // 识别目录自身的 href（通常是最短的那一条）
+      const sortedByHrefLen = [...entries].filter(e => e.href).sort((a,b) => (a.href.length||0) - (b.href.length||0));
+      const baseHref = sortedByHrefLen[0]?.href || '';
+      const items = entries
+        .filter(it => (it.href || '') !== baseHref)
+        .map(it => {
+          const href = decodeURIComponent(it.href || '');
+          let name = '';
+          if (href && baseHref && href.startsWith(baseHref)) {
+            name = href.slice(baseHref.length);
+          } else {
+            const parts = href.split('/').filter(Boolean);
+            name = parts.pop() || '';
+          }
+          name = name.replace(/\/$/, '');
+          const lastmod = it.lastmod;
+          const size = it.size;
+          return { name, lastmod, size };
+        })
+        .filter(it => it.name && it.name.toLowerCase().endsWith('.json'))
+        .sort((a,b) => b.lastmod - a.lastmod);
+      return items;
+    } catch (e) {
+      // 无列举权限时回退为空列表
+      return [];
+    }
   }
 
   async uploadJSON(name, obj) {
@@ -85,6 +96,19 @@ export class WebDAVClient {
     const res = await davFetch(url, { method: 'DELETE', headers: { ...this.authHeader() } });
     if (res.status >= 400) throw new Error(`删除失败: ${res.status}`);
     return true;
+  }
+
+  async probeWrite() {
+    try {
+      const testName = `.mytab_probe_${Date.now()}.json`;
+      const url = this.url + encodeURIComponent(testName);
+      const payload = { ts: Date.now() };
+      const putRes = await davFetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...this.authHeader() }, body: JSON.stringify(payload) });
+      if (putRes.status >= 400) return false;
+      // 删除探针文件（忽略失败）
+      try { await davFetch(url, { method: 'DELETE', headers: { ...this.authHeader() } }); } catch (e) {}
+      return true;
+    } catch (e) { return false; }
   }
 }
 
@@ -138,6 +162,8 @@ function davFetch(targetUrl, options) {
       // 平台可能拦截 PROPFIND，这里用自定义头传给代理再覆盖 method
       if (options && options.method && options.method.toUpperCase() === 'PROPFIND') {
         headers['x-dav-method'] = 'PROPFIND';
+        const { method, ...rest } = options;
+        return fetch(api, { method: 'POST', ...rest, headers });
       }
       return fetch(api, { ...options, headers });
     }
