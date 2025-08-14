@@ -259,6 +259,45 @@ async function renderBookmarkGrid() {
   const list = (container?.bookmarks || []).filter(bm => matchKeyword(bm, state.keyword));
 
   const tpl = document.getElementById('tpl-bookmark-card');
+  // 根级：先渲染二级文件夹为卡片
+  if (!state.selectedSubId) {
+    (folder?.subfolders || []).forEach(sub => {
+      const el = tpl.content.firstElementChild.cloneNode(true);
+      el.dataset.id = `sub_${sub.id}`;
+      el.title = sub.name;
+      const img = el.querySelector('.favicon');
+      const mono = el.querySelector('.mono-icon');
+      img.style.display = 'none';
+      mono.style.display = 'grid';
+      mono.style.background = 'rgba(78,168,222,0.22)';
+      mono.querySelector('.letter').textContent = '📁';
+      const titleEl = el.querySelector('.title');
+      if (titleEl) titleEl.textContent = sub.name;
+      // 接受拖拽：把书签移入该二级文件夹
+      el.addEventListener('dragover', (ev) => { ev.preventDefault(); ev.dataTransfer.dropEffect = 'move'; });
+      el.addEventListener('drop', async (ev) => {
+        ev.preventDefault();
+        const bookmarkId = ev.dataTransfer.getData('text/plain');
+        if (!bookmarkId) return;
+        const ok = await moveBookmark({ sourceFolderId: state.selectedFolderId, sourceSubId: state.selectedSubId, bookmarkId, targetFolderId: folder.id, targetSubId: sub.id });
+        if (ok) { renderBookmarkGrid(); }
+      });
+      el.addEventListener('click', () => {
+        state.selectedSubId = sub.id;
+        const header = document.getElementById('current-folder-name');
+        if (header) header.textContent = `${folder.name} / ${sub.name}`;
+        renderBookmarkGrid();
+      });
+      el.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        openContextMenu(e.clientX, e.clientY, [
+          { label: '重命名', onClick: async () => { const name = await textPrompt({ title: '重命名', placeholder: sub.name, value: sub.name }); if (name) { await renameSubfolder(folder.id, sub.id, name); renderBookmarkGrid(); } } },
+          { label: '删除', onClick: async () => { const ok = await confirmPrompt('删除该二级文件夹？'); if (ok) { await deleteSubfolder(folder.id, sub.id); if (state.selectedSubId === sub.id) { state.selectedSubId = null; const header = document.getElementById('current-folder-name'); if (header) header.textContent = folder.name; } renderBookmarkGrid(); } } }
+        ]);
+      });
+      grid.appendChild(el);
+    });
+  }
   // 如果在二级文件夹内，插入一个“返回上级”的虚拟书签作为第一项
   if (state.selectedSubId) {
     const backEl = tpl.content.firstElementChild.cloneNode(true);
