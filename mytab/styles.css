@@ -102,7 +102,7 @@ body {
 }
 
 .content-header .right { display:flex; align-items:center; gap: 12px; }
-.search { background: var(--surface); color: var(--text); border: none; border-radius: var(--ctl-radius); padding: 0 16px; min-width: 280px; box-shadow: var(--shadow-dark-sm), var(--shadow-light-sm); height: var(--ctl-height); line-height: var(--ctl-height); -webkit-appearance: none; }
+.search { font-size: 16px; background: var(--surface); color: var(--text); border: none; border-radius: var(--ctl-radius); padding: 0 16px; min-width: 280px; box-shadow: var(--shadow-dark-sm), var(--shadow-light-sm); height: var(--ctl-height); line-height: var(--ctl-height); -webkit-appearance: none; }
 .search::placeholder { color: var(--text-dim); }
 .search:focus, .search:focus-visible { outline: none; box-shadow: inset var(--shadow-dark-sm), inset var(--shadow-light-sm); }
 /* 提升标题在任意背景下的可读性 */
