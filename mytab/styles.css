@@ -251,6 +251,19 @@ body {
 }
 
 /* Mobile responsiveness */
+
+/* Stop mobile browsers from zooming in on input fields. */
+input[type="text"],
+input[type="password"],
+input[type="url"],
+input[type="email"],
+input[type="search"],
+input[type="number"],
+textarea,
+.search {
+  font-size: 16px;
+}
+
 @media (max-width: 768px) {
   #app {
     display: block;
