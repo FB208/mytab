@@ -126,10 +126,12 @@
             <input id="bm-favicon" class="search" placeholder="https://example.com/favicon.ico" autocomplete="off"/>
           </div>
           <div class="field">
-            <div class="label">从网址获取</div>
+            <div class="label">自动获取</div>
             <div style="display:flex; gap:10px; align-items:center;">
-              <button id="bm-fetch-fav" class="ghost-btn">获取图标</button>
-              <button id="bm-fetch-title" class="ghost-btn">获取标题</button>
+              <div id="fetch-status" class="fetch-status hidden">
+                <div class="loading-dot"></div>
+                <span>正在获取图标和标题...</span>
+              </div>
             </div>
           </div>
         </div>

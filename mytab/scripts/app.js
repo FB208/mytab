@@ -589,8 +589,7 @@ const modal = {
   name: document.getElementById('bm-name'),
   remark: document.getElementById('bm-remark'),
   favUrl: document.getElementById('bm-favicon'),
-  fetchFav: document.getElementById('bm-fetch-fav'),
-  fetchTitle: document.getElementById('bm-fetch-title'),
+  fetchStatus: document.getElementById('fetch-status'),
   favCandidatesWrap: document.getElementById('row-fav-candidates'),
   favCandidates: document.getElementById('bm-fav-candidates'),
   letter: document.getElementById('bm-letter'),
@@ -657,10 +656,21 @@ let fetchTimer = null;
 modal.url?.addEventListener('input', () => {
   const url = modal.url.value.trim();
   clearTimeout(fetchTimer);
+  modal.fetchStatus?.classList.add('hidden');
+  
   if (!url) return;
-  fetchTimer = setTimeout(() => {
-    doFetchFavicons(url, true);
-    if (!modal.name.value.trim()) fetchTitle(url);
+  
+  fetchTimer = setTimeout(async () => {
+    modal.fetchStatus?.classList.remove('hidden');
+    
+    try {
+      await Promise.all([
+        doFetchFavicons(url, true),
+        !modal.name.value.trim() ? fetchTitle(url) : Promise.resolve()
+      ]);
+    } finally {
+      setTimeout(() => modal.fetchStatus?.classList.add('hidden'), 1000);
+    }
   }, 500);
 });
 
@@ -700,18 +710,7 @@ modal.save?.addEventListener('click', async () => {
   renderBookmarkGrid();
 });
 
-modal.fetchFav?.addEventListener('click', async () => {
-  const url = modal.url.value.trim();
-  if (!url) { alert('请先填写网址'); return; }
-  await doFetchFavicons(url, false);
-});
 
-// 手动获取标题按钮
-modal.fetchTitle?.addEventListener('click', () => {
-  const url = modal.url.value.trim();
-  if (!url) { alert('请先填写网址'); return; }
-  fetchTitle(url);
-});
 
 // 获取网站标题
 async function fetchTitle(url) {
@@ -732,18 +731,19 @@ async function fetchTitle(url) {
   } catch (e) {}
 }
 
+// 图标获取状态变量
+let favFetchBusy = false;
+let favFetchLastUrl = '';
+
 async function doFetchFavicons(url, isAuto) {
-  if (favFetchBusy) return; // 避免重复执行
-  if (isAuto && favFetchLastUrl === url) return; // 同一网址防重复
+  if (favFetchBusy) return;
+  if (isAuto && favFetchLastUrl === url) return;
   favFetchBusy = true;
-  const btn = modal.fetchFav;
-  const prevText = btn?.textContent;
-  if (!isAuto && btn) { btn.disabled = true; btn.textContent = '获取中…'; }
   favFetchLastUrl = url;
+  
   try {
     let candidates = [];
     try {
-      // 已获授权才使用后台抓取，避免权限弹窗
       let hasPerm = false;
       try { const u = new URL(url); hasPerm = await chrome.permissions.contains({ origins: [u.origin + '/*'] }); } catch (e) {}
       if (hasPerm) {
@@ -755,10 +755,9 @@ async function doFetchFavicons(url, isAuto) {
     const uniq = [...new Set(candidates)];
     renderFavCandidates(uniq);
   } catch (e) {
-    if (!isAuto) alert('获取失败');
+    // 静默失败
   } finally {
     favFetchBusy = false;
-    if (!isAuto && btn) { btn.disabled = false; btn.textContent = prevText; }
   }
 }
 
