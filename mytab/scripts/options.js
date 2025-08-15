@@ -27,7 +27,8 @@ async function init() {
   els.enabled.checked = !!settings.backup?.enabled;
   els.hours.value = settings.backup?.frequencyHours ?? 4;
   els.max.value = settings.backup?.maxSnapshots ?? 100;
-  els.bgUrl.value = (data.backgroundImage && data.backgroundImage.trim()) ? data.backgroundImage : DEFAULT_BG_URL;
+  els.bgUrl.value = data.backgroundImage || '';
+  els.bgUrl.placeholder = "请输入背景图片Url";
 
   bind();
   await refreshList();
