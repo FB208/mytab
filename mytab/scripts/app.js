@@ -590,6 +590,7 @@ const modal = {
   remark: document.getElementById('bm-remark'),
   favUrl: document.getElementById('bm-favicon'),
   fetchFav: document.getElementById('bm-fetch-fav'),
+  fetchTitle: document.getElementById('bm-fetch-title'),
   favCandidatesWrap: document.getElementById('row-fav-candidates'),
   favCandidates: document.getElementById('bm-fav-candidates'),
   letter: document.getElementById('bm-letter'),
@@ -651,15 +652,16 @@ modal.modeRadios().forEach(r => r.addEventListener('change', () => {
 }));
 
 [modal.url, modal.favUrl, modal.letter, modal.color].forEach(el => el?.addEventListener('input', refreshPreview));
-// 网址变化时自动尝试获取网站图标（防抖）
-let favFetchBusy = false;
-let favFetchTimer = null;
-let favFetchLastUrl = '';
+// 网址变化时自动尝试获取网站图标和名称（防抖）
+let fetchTimer = null;
 modal.url?.addEventListener('input', () => {
   const url = modal.url.value.trim();
-  clearTimeout(favFetchTimer);
+  clearTimeout(fetchTimer);
   if (!url) return;
-  favFetchTimer = setTimeout(() => doFetchFavicons(url, true), 500);
+  fetchTimer = setTimeout(() => {
+    doFetchFavicons(url, true);
+    if (!modal.name.value.trim()) fetchTitle(url);
+  }, 500);
 });
 
 modal.save?.addEventListener('click', async () => {
@@ -704,6 +706,32 @@ modal.fetchFav?.addEventListener('click', async () => {
   await doFetchFavicons(url, false);
 });
 
+// 手动获取标题按钮
+modal.fetchTitle?.addEventListener('click', () => {
+  const url = modal.url.value.trim();
+  if (!url) { alert('请先填写网址'); return; }
+  fetchTitle(url);
+});
+
+// 获取网站标题
+async function fetchTitle(url) {
+  try {
+    // 优先使用后台获取
+    const res = await chrome.runtime.sendMessage({ type: 'title:fetch', url });
+    if (res?.title) {
+      modal.name.value = res.title;
+      return;
+    }
+  } catch (e) {}
+  
+  // 后台失败时用域名作为备选
+  try {
+    const u = new URL(url);
+    const domain = u.hostname.replace(/^www\./, '');
+    modal.name.value = domain.split('.')[0].charAt(0).toUpperCase() + domain.split('.')[0].slice(1);
+  } catch (e) {}
+}
+
 async function doFetchFavicons(url, isAuto) {
   if (favFetchBusy) return; // 避免重复执行
   if (isAuto && favFetchLastUrl === url) return; // 同一网址防重复
@@ -733,6 +761,8 @@ async function doFetchFavicons(url, isAuto) {
     if (!isAuto && btn) { btn.disabled = false; btn.textContent = prevText; }
   }
 }
+
+
 
 function getIconMode() { return modal.modeRadios().find(r => r.checked)?.value || 'favicon'; }
 
@@ -819,6 +849,8 @@ async function collectFavicons(pageUrl) {
     return [];
   }
 }
+
+
 
 function testImageLoad(url) {
   return new Promise((resolve) => {

@@ -94,6 +94,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         sendResponse({ ok: true, icons: out });
         return;
       }
+      if (msg?.type === 'title:fetch') {
+        const { url } = msg;
+        const title = await fetchTitle(url);
+        sendResponse({ title });
+        return;
+      }
+
       if (msg?.type === 'backup:manual') {
         const src = msg?.source || 'manual';
         await doBackup(src);
@@ -208,3 +215,17 @@ async function collectFaviconsInBg(pageUrl) {
   ];
   return [...new Set([...checks.filter(Boolean), ...s2])];
 }
+
+// 获取网站标题
+async function fetchTitle(url) {
+  try {
+    const response = await fetch(url);
+    const html = await response.text();
+    const match = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+    return match ? match[1].trim() : '';
+  } catch (e) {
+    return '';
+  }
+}
+
+
