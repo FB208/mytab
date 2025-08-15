@@ -111,7 +111,7 @@ body {
 
 /* 浮动工具条：透明悬浮，无外框 */
 .tools-floating { position: absolute; top: 10px; right: 16px; display:flex; align-items:center; gap: 10px; background: transparent; box-shadow: none; }
-.tools-floating .search { min-width: 240px; height: var(--ctl-sm-height); line-height: var(--ctl-sm-height); border-radius: 10px; padding: 0 12px; font-size: 13px; box-shadow: var(--shadow-dark-sm), var(--shadow-light-sm); background: rgba(255,255,255,0.6); border: 1px solid rgba(255,255,255,0.35); }
+.tools-floating .search { min-width: 240px; height: var(--ctl-sm-height); line-height: var(--ctl-sm-height); border-radius: 10px; padding: 0 12px; font-size: 16px; box-shadow: var(--shadow-dark-sm), var(--shadow-light-sm); background: rgba(255,255,255,0.6); border: 1px solid rgba(255,255,255,0.35); }
 
 /* 二级文件夹改为与书签同格布局，原样式移除 */
 .subfolders { display:none; }
