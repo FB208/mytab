@@ -1,4 +1,24 @@
-import { ensureInit, readAll, addFolder, renameFolder, deleteFolder, addSubfolder, renameSubfolder, deleteSubfolder, addBookmark, renameBookmark, deleteBookmark, buildFaviconUrl, updateBookmarkMono, updateBookmarkFavicon, updateBookmark, reorderBookmarksRelative, moveBookmark, updateBookmarkRemark, DEFAULT_BG_URL } from './storage.js';
+import {
+  ensureInit,
+  readAll,
+  addFolder,
+  renameFolder,
+  deleteFolder,
+  addSubfolder,
+  renameSubfolder,
+  deleteSubfolder,
+  addBookmark,
+  renameBookmark,
+  deleteBookmark,
+  buildFaviconUrl,
+  updateBookmarkMono,
+  updateBookmarkFavicon,
+  updateBookmark,
+  reorderBookmarksRelative,
+  moveBookmark,
+  updateBookmarkRemark,
+  DEFAULT_BG_URL
+} from './storage.js';
 
 let state = {
   selectedFolderId: null,
@@ -6,18 +26,52 @@ let state = {
   keyword: ''
 };
 
+// Modal相关变量
+let modal;
+let modalCtx = {
+  mode: 'add',
+  bookmarkId: null,
+  folderId: null,
+  subId: null
+};
+let modalFavCandidates = [];
+let fetchTimer = null;
+let modalKeydownHandler = null;
+let cloudCheckTimer = null;
+let lastCloudCheckTime = 0;
+let globalLoading = null;
+let isSyncing = false;
+
 await ensureInit();
 await bootstrap();
+// 延迟检查云端数据，避免与初始化冲突
+setTimeout(() => {
+  checkCloudDataAndPrompt();
+}, 1000);
 
 chrome.runtime.onMessage.addListener((msg) => {
-  if (msg?.type === 'data:changed') {
+  if (msg && msg.type === 'data:changed') {
     render();
   }
 });
 
 // 监听所有操作以触发“操作型自动备份”
 async function recordHandleBackup() {
-  try { await chrome.runtime.sendMessage({ type: 'backup:manual', source: 'auto' }); } catch (e) {}
+  try {
+    await chrome.runtime.sendMessage({
+      type: 'backup:manual',
+      source: 'auto'
+    });
+  } catch (e) {}
+}
+
+// 检查是否正在同步，如果是则阻止操作
+function checkSyncStatus() {
+  if (isSyncing) {
+    toast('⚠️ 正在同步数据，请稍候完成后再操作', 2000);
+    return false;
+  }
+  return true;
 }
 
 async function bootstrap() {
@@ -26,12 +80,41 @@ async function bootstrap() {
 }
 
 function bindEvents() {
+  // 初始化modal对象
+  modal = {
+    backdrop: document.getElementById('modal-backdrop'),
+    root: document.getElementById('bookmark-modal'),
+    title: document.getElementById('modal-title'),
+    close: document.getElementById('modal-close'),
+    cancel: document.getElementById('modal-cancel'),
+    save: document.getElementById('modal-save'),
+    url: document.getElementById('bm-url'),
+    name: document.getElementById('bm-name'),
+    remark: document.getElementById('bm-remark'),
+    favUrl: document.getElementById('bm-favicon'),
+    fetchStatus: document.getElementById('fetch-status'),
+    favCandidatesWrap: document.getElementById('row-fav-candidates'),
+    favCandidates: document.getElementById('bm-fav-candidates'),
+    letter: document.getElementById('bm-letter'),
+    color: document.getElementById('bm-color'),
+    rowFav: document.getElementById('row-favicon'),
+    rowMono: document.getElementById('row-mono'),
+    previewFav: document.getElementById('preview-fav'),
+    previewMono: document.getElementById('preview-mono'),
+    modeRadios: () => [...document.querySelectorAll('input[name="icon-mode"]')]
+  };
+
   document.getElementById('btn-settings').addEventListener('click', () => {
     if (chrome.runtime.openOptionsPage) chrome.runtime.openOptionsPage();
   });
 
   document.getElementById('btn-add-folder').addEventListener('click', async () => {
-    const name = await textPrompt({ title: '新建一级文件夹', placeholder: '文件夹名称' });
+    if (!checkSyncStatus()) return;
+    
+    const name = await textPrompt({
+      title: '新建一级文件夹',
+      placeholder: '文件夹名称'
+    });
     if (!name) return;
     const folder = await addFolder(name);
     state.selectedFolderId = folder.id;
@@ -61,87 +144,141 @@ function bindEvents() {
     }
   });
 
-// 全局搜索弹窗
-const searchModal = {
-  root: document.getElementById('search-modal'),
-  close: document.getElementById('search-close'),
-  list: document.getElementById('search-list')
-};
-searchModal.close?.addEventListener('click', () => toggleSearch(false));
+  // 全局搜索弹窗
+  const searchModal = {
+    root: document.getElementById('search-modal'),
+    close: document.getElementById('search-close'),
+    list: document.getElementById('search-list')
+  };
+  searchModal.close?.addEventListener('click', () => toggleSearch(false));
 
-let searchTimer = null;
-function triggerGlobalSearch(keyword) {
-  clearTimeout(searchTimer);
-  if (!keyword) { toggleSearch(false); return; }
-  searchTimer = setTimeout(async () => {
-    const items = await collectGlobalMatches(keyword);
-    if (items.length === 0) { toggleSearch(false); return; }
-    renderSearchList(items);
-    toggleSearch(true);
-  }, 250);
-}
+  let searchTimer = null;
 
-async function collectGlobalMatches(keyword) {
-  const k = keyword.toLowerCase();
-  const { data } = await readAll();
-  const results = [];
-  data.folders.forEach(folder => {
-    const pushItem = (bm, sub) => {
-      if (!bm) return;
-      const txt = `${bm.name || ''} ${bm.url || ''}`.toLowerCase();
-      if (txt.includes(k)) {
-        results.push({
-          id: bm.id,
-          name: bm.name || bm.url,
-          url: bm.url,
-          iconType: bm.iconType,
-          iconUrl: bm.iconUrl,
-          mono: bm.mono,
-          folderId: folder.id,
-          subId: sub?.id || null,
-          folderName: folder.name,
-          subName: sub?.name || ''
-        });
-      }
-    };
-    (folder.bookmarks || []).forEach(b => pushItem(b, null));
-    (folder.subfolders || []).forEach(sub => (sub.bookmarks || []).forEach(b => pushItem(b, sub)));
-  });
-  return results.slice(0, 200);
-}
-
-function toggleSearch(show) {
-  searchModal.root.classList.toggle('hidden', !show);
-}
-
-function renderSearchList(items) {
-  searchModal.list.innerHTML = '';
-  items.forEach(it => {
-    const row = document.createElement('div');
-    row.className = 'search-item';
-    const cover = document.createElement('div');
-    cover.className = 'cover';
-    if (it.iconType === 'favicon' && it.iconUrl) {
-      const img = document.createElement('img');
-      img.src = it.iconUrl; cover.appendChild(img);
-    } else if (it.mono) {
-      const m = document.createElement('div');
-      m.className = 'mono'; m.style.background = it.mono.color; m.textContent = (it.mono.letter || '?').toUpperCase();
-      cover.appendChild(m);
+  function triggerGlobalSearch(keyword) {
+    clearTimeout(searchTimer);
+    if (!keyword) {
+      toggleSearch(false);
+      return;
     }
-    const meta = document.createElement('div'); meta.className = 'meta';
-    const name = document.createElement('div'); name.className = 'name'; name.textContent = it.name;
-    const url = document.createElement('div'); url.className = 'url'; url.textContent = it.url;
-    meta.appendChild(name); meta.appendChild(url);
-    row.appendChild(cover); row.appendChild(meta);
-    row.addEventListener('click', () => window.open(it.url, '_blank'));
-    searchModal.list.appendChild(row);
+    searchTimer = setTimeout(async () => {
+      const items = await collectGlobalMatches(keyword);
+      if (items.length === 0) {
+        toggleSearch(false);
+        return;
+      }
+      renderSearchList(items);
+      toggleSearch(true);
+    }, 250);
+  }
+
+  async function collectGlobalMatches(keyword) {
+    const k = keyword.toLowerCase();
+    const {
+      data
+    } = await readAll();
+    const results = [];
+    data.folders.forEach(folder => {
+      const pushItem = (bm, sub) => {
+        if (!bm) return;
+        const txt = `${bm.name || ''} ${bm.url || ''}`.toLowerCase();
+        if (txt.includes(k)) {
+          results.push({
+            id: bm.id,
+            name: bm.name || bm.url,
+            url: bm.url,
+            iconType: bm.iconType,
+            iconUrl: bm.iconUrl,
+            mono: bm.mono,
+            folderId: folder.id,
+            subId: sub?.id || null,
+            folderName: folder.name,
+            subName: sub?.name || ''
+          });
+        }
+      };
+      (folder.bookmarks || []).forEach(b => pushItem(b, null));
+      (folder.subfolders || []).forEach(sub => (sub.bookmarks || []).forEach(b => pushItem(b, sub)));
+    });
+    return results.slice(0, 200);
+  }
+
+  function toggleSearch(show) {
+    searchModal.root.classList.toggle('hidden', !show);
+  }
+
+  function renderSearchList(items) {
+    searchModal.list.innerHTML = '';
+    items.forEach(it => {
+      const row = document.createElement('div');
+      row.className = 'search-item';
+      const cover = document.createElement('div');
+      cover.className = 'cover';
+      if (it.iconType === 'favicon' && it.iconUrl) {
+        const img = document.createElement('img');
+        img.src = it.iconUrl;
+        cover.appendChild(img);
+      } else if (it.mono) {
+        const m = document.createElement('div');
+        m.className = 'mono';
+        m.style.background = it.mono.color;
+        m.textContent = (it.mono.letter || '?').toUpperCase();
+        cover.appendChild(m);
+      }
+      const meta = document.createElement('div');
+      meta.className = 'meta';
+      const name = document.createElement('div');
+      name.className = 'name';
+      name.textContent = it.name;
+      const url = document.createElement('div');
+      url.className = 'url';
+      url.textContent = it.url;
+      meta.appendChild(name);
+      meta.appendChild(url);
+      row.appendChild(cover);
+      row.appendChild(meta);
+      row.addEventListener('click', () => window.open(it.url, '_blank'));
+      searchModal.list.appendChild(row);
+    });
+  }
+
+  // Modal事件监听器
+  modal.close?.addEventListener('click', () => showModal(false));
+  modal.cancel?.addEventListener('click', () => showModal(false));
+  modal.save?.addEventListener('click', handleModalSave);
+
+  modal.modeRadios().forEach(r => r.addEventListener('change', () => {
+    applyIconMode(getIconMode());
+    refreshPreview();
+  }));
+
+  [modal.url, modal.favUrl, modal.letter, modal.color].forEach(el => el?.addEventListener('input', refreshPreview));
+
+  modal.url?.addEventListener('input', () => {
+    const url = modal.url.value.trim();
+    clearTimeout(fetchTimer);
+    modal.fetchStatus?.classList.add('hidden');
+
+    if (!url) return;
+
+    fetchTimer = setTimeout(async () => {
+      modal.fetchStatus?.classList.remove('hidden');
+
+      try {
+        await Promise.all([
+          doFetchFavicons(url, true),
+          !modal.name.value.trim() ? fetchTitle(url) : Promise.resolve()
+        ]);
+      } finally {
+        setTimeout(() => modal.fetchStatus?.classList.add('hidden'), 1000);
+      }
+    }, 500);
   });
-}
 }
 
 async function render() {
-  const { data } = await readAll();
+  const {
+    data
+  } = await readAll();
   const bg = document.getElementById('bg');
   const url = data.backgroundImage && data.backgroundImage.trim() ? data.backgroundImage : DEFAULT_BG_URL;
   bg.style.backgroundImage = `url(${url})`;
@@ -151,7 +288,9 @@ async function render() {
 }
 
 async function renderFolderList() {
-  const { data } = await readAll();
+  const {
+    data
+  } = await readAll();
   const list = document.getElementById('folder-list');
   list.innerHTML = '';
   const tpl = document.getElementById('tpl-folder-item');
@@ -173,11 +312,21 @@ async function renderFolderList() {
       ev.preventDefault();
       const bookmarkId = ev.dataTransfer.getData('text/plain');
       if (!bookmarkId) return;
-      const { data } = await readAll();
+      const {
+        data
+      } = await readAll();
       const currentFolder = data.folders.find(f => f.id === state.selectedFolderId);
       if (!currentFolder) return;
-      const ok = await moveBookmark({ sourceFolderId: state.selectedFolderId, sourceSubId: state.selectedSubId, bookmarkId, targetFolderId: folder.id, targetSubId: null });
-      if (ok) { renderBookmarkGrid(); }
+      const ok = await moveBookmark({
+        sourceFolderId: state.selectedFolderId,
+        sourceSubId: state.selectedSubId,
+        bookmarkId,
+        targetFolderId: folder.id,
+        targetSubId: null
+      });
+      if (ok) {
+        renderBookmarkGrid();
+      }
     });
     el.addEventListener('click', () => {
       state.selectedFolderId = folder.id;
@@ -189,9 +338,34 @@ async function renderFolderList() {
     });
     el.addEventListener('contextmenu', (e) => {
       e.preventDefault();
-      openContextMenu(e.clientX, e.clientY, [
-        { label: '重命名', onClick: async () => { const name = await textPrompt({ title: '重命名', placeholder: folder.name, value: folder.name }); if (name) { await renameFolder(folder.id, name); render(); } } },
-        { label: '删除', onClick: async () => { const ok = await confirmPrompt('确认删除该文件夹及其内容？'); if (ok) { await deleteFolder(folder.id); if (state.selectedFolderId === folder.id) { state.selectedFolderId = null; state.selectedSubId = null; } render(); } } }
+      openContextMenu(e.clientX, e.clientY, [{
+          label: '重命名',
+          onClick: async () => {
+            const name = await textPrompt({
+              title: '重命名',
+              placeholder: folder.name,
+              value: folder.name
+            });
+            if (name) {
+              await renameFolder(folder.id, name);
+              render();
+            }
+          }
+        },
+        {
+          label: '删除',
+          onClick: async () => {
+            const ok = await confirmPrompt('确认删除该文件夹及其内容？');
+            if (ok) {
+              await deleteFolder(folder.id);
+              if (state.selectedFolderId === folder.id) {
+                state.selectedFolderId = null;
+                state.selectedSubId = null;
+              }
+              render();
+            }
+          }
+        }
       ]);
     });
     list.appendChild(el);
@@ -202,7 +376,9 @@ async function renderFolderList() {
 }
 
 async function renderSubfolders() {
-  const { data } = await readAll();
+  const {
+    data
+  } = await readAll();
   const wrap = document.getElementById('subfolder-list');
   wrap.innerHTML = '';
   if (!state.selectedFolderId) return;
@@ -213,13 +389,24 @@ async function renderSubfolders() {
     el.querySelector('.name').textContent = sub.name;
     if (state.selectedSubId === sub.id) el.classList.add('active');
     // 作为拖拽目标：允许放置书签，移动到该二级文件夹
-    el.addEventListener('dragover', (ev) => { ev.preventDefault(); ev.dataTransfer.dropEffect = 'move'; });
+    el.addEventListener('dragover', (ev) => {
+      ev.preventDefault();
+      ev.dataTransfer.dropEffect = 'move';
+    });
     el.addEventListener('drop', async (ev) => {
       ev.preventDefault();
       const bookmarkId = ev.dataTransfer.getData('text/plain');
       if (!bookmarkId) return;
-      const ok = await moveBookmark({ sourceFolderId: state.selectedFolderId, sourceSubId: state.selectedSubId, bookmarkId, targetFolderId: folder.id, targetSubId: sub.id });
-      if (ok) { renderBookmarkGrid(); }
+      const ok = await moveBookmark({
+        sourceFolderId: state.selectedFolderId,
+        sourceSubId: state.selectedSubId,
+        bookmarkId,
+        targetFolderId: folder.id,
+        targetSubId: sub.id
+      });
+      if (ok) {
+        renderBookmarkGrid();
+      }
     });
     el.addEventListener('click', () => {
       state.selectedSubId = sub.id;
@@ -231,8 +418,15 @@ async function renderSubfolders() {
     });
     el.querySelector('.rename').addEventListener('click', async (e) => {
       e.stopPropagation();
-      const name = await textPrompt({ title: '重命名', placeholder: sub.name, value: sub.name });
-      if (name) { await renameSubfolder(folder.id, sub.id, name); renderSubfolders(); }
+      const name = await textPrompt({
+        title: '重命名',
+        placeholder: sub.name,
+        value: sub.name
+      });
+      if (name) {
+        await renameSubfolder(folder.id, sub.id, name);
+        renderSubfolders();
+      }
     });
     el.querySelector('.delete').addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -253,7 +447,9 @@ async function renderSubfolders() {
 }
 
 async function renderBookmarkGrid() {
-  const { data } = await readAll();
+  const {
+    data
+  } = await readAll();
   const grid = document.getElementById('bookmark-grid');
   grid.innerHTML = '';
   if (!state.selectedFolderId) return;
@@ -277,13 +473,24 @@ async function renderBookmarkGrid() {
       const titleEl = el.querySelector('.title');
       if (titleEl) titleEl.textContent = sub.name;
       // 接受拖拽：把书签移入该二级文件夹
-      el.addEventListener('dragover', (ev) => { ev.preventDefault(); ev.dataTransfer.dropEffect = 'move'; });
+      el.addEventListener('dragover', (ev) => {
+        ev.preventDefault();
+        ev.dataTransfer.dropEffect = 'move';
+      });
       el.addEventListener('drop', async (ev) => {
         ev.preventDefault();
         const bookmarkId = ev.dataTransfer.getData('text/plain');
         if (!bookmarkId) return;
-        const ok = await moveBookmark({ sourceFolderId: state.selectedFolderId, sourceSubId: state.selectedSubId, bookmarkId, targetFolderId: folder.id, targetSubId: sub.id });
-        if (ok) { renderBookmarkGrid(); }
+        const ok = await moveBookmark({
+          sourceFolderId: state.selectedFolderId,
+          sourceSubId: state.selectedSubId,
+          bookmarkId,
+          targetFolderId: folder.id,
+          targetSubId: sub.id
+        });
+        if (ok) {
+          renderBookmarkGrid();
+        }
       });
       el.addEventListener('click', () => {
         state.selectedSubId = sub.id;
@@ -293,9 +500,35 @@ async function renderBookmarkGrid() {
       });
       el.addEventListener('contextmenu', (e) => {
         e.preventDefault();
-        openContextMenu(e.clientX, e.clientY, [
-          { label: '重命名', onClick: async () => { const name = await textPrompt({ title: '重命名', placeholder: sub.name, value: sub.name }); if (name) { await renameSubfolder(folder.id, sub.id, name); renderBookmarkGrid(); } } },
-          { label: '删除', onClick: async () => { const ok = await confirmPrompt('删除该二级文件夹？'); if (ok) { await deleteSubfolder(folder.id, sub.id); if (state.selectedSubId === sub.id) { state.selectedSubId = null; const header = document.getElementById('current-folder-name'); if (header) header.textContent = folder.name; } renderBookmarkGrid(); } } }
+        openContextMenu(e.clientX, e.clientY, [{
+            label: '重命名',
+            onClick: async () => {
+              const name = await textPrompt({
+                title: '重命名',
+                placeholder: sub.name,
+                value: sub.name
+              });
+              if (name) {
+                await renameSubfolder(folder.id, sub.id, name);
+                renderBookmarkGrid();
+              }
+            }
+          },
+          {
+            label: '删除',
+            onClick: async () => {
+              const ok = await confirmPrompt('删除该二级文件夹？');
+              if (ok) {
+                await deleteSubfolder(folder.id, sub.id);
+                if (state.selectedSubId === sub.id) {
+                  state.selectedSubId = null;
+                  const header = document.getElementById('current-folder-name');
+                  if (header) header.textContent = folder.name;
+                }
+                renderBookmarkGrid();
+              }
+            }
+          }
         ]);
       });
       grid.appendChild(el);
@@ -346,7 +579,12 @@ async function renderBookmarkGrid() {
       const sourceId = ev.dataTransfer.getData('text/plain');
       const targetId = bm.id;
       if (!sourceId || sourceId === targetId) return;
-      await reorderBookmarksRelative({ folderId: folder.id, subId: state.selectedSubId, sourceId, targetId });
+      await reorderBookmarksRelative({
+        folderId: folder.id,
+        subId: state.selectedSubId,
+        sourceId,
+        targetId
+      });
       renderBookmarkGrid();
     });
     const img = el.querySelector('.favicon');
@@ -358,7 +596,16 @@ async function renderBookmarkGrid() {
       img.onload = () => {
         if (!bm.iconDataUrl && bm.iconUrl) {
           imageToDataUrl(bm.iconUrl).then((dataUrl) => {
-            if (dataUrl) updateBookmark({ folderId: folder.id, subId: state.selectedSubId, bookmarkId: bm.id, url: bm.url, name: bm.name, iconType: 'favicon', iconUrl: bm.iconUrl, iconDataUrl: dataUrl });
+            if (dataUrl) updateBookmark({
+              folderId: folder.id,
+              subId: state.selectedSubId,
+              bookmarkId: bm.id,
+              url: bm.url,
+              name: bm.name,
+              iconType: 'favicon',
+              iconUrl: bm.iconUrl,
+              iconDataUrl: dataUrl
+            });
           }).catch(() => {});
         }
       };
@@ -366,7 +613,13 @@ async function renderBookmarkGrid() {
         // 自动降级为单色图标并持久化
         const letter = (bm.name || bm.url || 'W')[0] || 'W';
         const color = pickColorFromString(letter);
-        await updateBookmarkMono({ folderId: folder.id, subId: state.selectedSubId, bookmarkId: bm.id, letter, color });
+        await updateBookmarkMono({
+          folderId: folder.id,
+          subId: state.selectedSubId,
+          bookmarkId: bm.id,
+          letter,
+          color
+        });
         renderBookmarkGrid();
       };
     } else if (bm.mono) {
@@ -378,9 +631,31 @@ async function renderBookmarkGrid() {
     el.addEventListener('click', () => window.open(bm.url, '_blank'));
     el.addEventListener('contextmenu', (e) => {
       e.preventDefault();
-      openContextMenu(e.clientX, e.clientY, [
-        { label: '编辑', onClick: () => openBookmarkModal({ mode: 'edit', bookmark: { ...bm }, folderId: folder.id, subId: state.selectedSubId }) },
-        { label: '删除', onClick: async () => { const ok = await confirmPrompt('删除该书签？'); if (ok) { await deleteBookmark({ folderId: folder.id, subId: state.selectedSubId, bookmarkId: bm.id }); renderBookmarkGrid(); } } }
+      openContextMenu(e.clientX, e.clientY, [{
+          label: '编辑',
+          onClick: () => openBookmarkModal({
+            mode: 'edit',
+            bookmark: {
+              ...bm
+            },
+            folderId: folder.id,
+            subId: state.selectedSubId
+          })
+        },
+        {
+          label: '删除',
+          onClick: async () => {
+            const ok = await confirmPrompt('删除该书签？');
+            if (ok) {
+              await deleteBookmark({
+                folderId: folder.id,
+                subId: state.selectedSubId,
+                bookmarkId: bm.id
+              });
+              renderBookmarkGrid();
+            }
+          }
+        }
       ]);
     });
     grid.appendChild(el);
@@ -391,14 +666,14 @@ async function renderBookmarkGrid() {
     const addEl = tpl.content.firstElementChild.cloneNode(true);
     addEl.id = 'btn-add-new-item';
     addEl.title = '添加书签或文件夹';
-    
+
     const title = addEl.querySelector('.title');
     const img = addEl.querySelector('.favicon');
     const mono = addEl.querySelector('.mono-icon');
 
     if (title) title.textContent = '添加';
     if (img) img.style.display = 'none';
-    
+
     if (mono) {
       mono.style.display = 'grid';
       mono.style.background = '#d1d5db'; // A neutral gray color
@@ -414,10 +689,15 @@ async function renderBookmarkGrid() {
       if (!choice) return;
 
       if (choice === 'bookmark') {
-        openBookmarkModal({ mode: 'add' });
+        openBookmarkModal({
+          mode: 'add'
+        });
       } else if (choice === 'folder') {
         if (!state.selectedFolderId) return toast('请先选择一个一级文件夹');
-        const name = await textPrompt({ title: '新建文件夹', placeholder: '文件夹名称' });
+        const name = await textPrompt({
+          title: '新建文件夹',
+          placeholder: '文件夹名称'
+        });
         if (name) {
           await addSubfolder(state.selectedFolderId, name);
           render();
@@ -442,21 +722,44 @@ function pickColorFromString(s) {
 }
 
 function hashCode(str) {
-  let h = 0; for (let i = 0; i < str.length; i++) { h = Math.imul(31, h) + str.charCodeAt(i) | 0; } return h;
+  let h = 0;
+  for (let i = 0; i < str.length; i++) {
+    h = Math.imul(31, h) + str.charCodeAt(i) | 0;
+  }
+  return h;
 }
 
 // 轻量 toast
 function toast(text, duration = 1600) {
   const t = document.createElement('div');
   t.textContent = text;
-  Object.assign(t.style, { position: 'fixed', right: '20px', bottom: '20px', background: 'rgba(15,23,42,0.9)', color: '#fff', padding: '10px 14px', borderRadius: '10px', zIndex: 9999, boxShadow: '0 6px 20px rgba(0,0,0,0.25)', fontSize: '13px' });
+  Object.assign(t.style, {
+    position: 'fixed',
+    right: '20px',
+    bottom: '20px',
+    background: 'rgba(15,23,42,0.9)',
+    color: '#fff',
+    padding: '10px 14px',
+    borderRadius: '10px',
+    zIndex: 9999,
+    boxShadow: '0 6px 20px rgba(0,0,0,0.25)',
+    fontSize: '13px'
+  });
   document.body.appendChild(t);
-  setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity .3s'; }, duration - 300);
+  setTimeout(() => {
+    t.style.opacity = '0';
+    t.style.transition = 'opacity .3s';
+  }, duration - 300);
   setTimeout(() => t.remove(), duration);
 }
 
 // 文本输入弹窗
-async function textPrompt({ title = '输入', message = '', placeholder = '', value = '' } = {}) {
+async function textPrompt({
+  title = '输入',
+  message = '',
+  placeholder = '',
+  value = ''
+} = {}) {
   const root = document.getElementById('text-modal');
   const backdrop = document.getElementById('modal-backdrop');
   const titleEl = document.getElementById('tm-title');
@@ -474,21 +777,21 @@ async function textPrompt({ title = '输入', message = '', placeholder = '', va
     root.classList.remove('hidden');
     backdrop.classList.remove('hidden');
     input.focus();
-  const onKey = (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      cleanup(input.value.trim());
-    } else if (e.key === 'Escape') {
-      e.preventDefault();
-      cleanup('');
-    }
-  };
-  input.addEventListener('keydown', onKey);
-  const cleanup = (val) => {
+    const onKey = (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        cleanup(input.value.trim());
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        cleanup('');
+      }
+    };
+    input.addEventListener('keydown', onKey);
+    const cleanup = (val) => {
       root.classList.add('hidden');
       backdrop.classList.add('hidden');
       btnClose.onclick = btnCancel.onclick = btnSave.onclick = null;
-    input.removeEventListener('keydown', onKey);
+      input.removeEventListener('keydown', onKey);
       resolve(val);
     };
     btnClose.onclick = () => cleanup('');
@@ -564,48 +867,38 @@ function openContextMenu(x, y, items) {
   items.forEach(it => {
     const li = document.createElement('li');
     li.textContent = it.label;
-    li.addEventListener('click', () => { hideContextMenu(); it.onClick?.(); });
+    li.addEventListener('click', () => {
+      hideContextMenu();
+      it.onClick?.();
+    });
     ctxMenu.list.appendChild(li);
   });
   ctxMenu.root.style.left = x + 'px';
   ctxMenu.root.style.top = y + 'px';
   ctxMenu.root.classList.remove('hidden');
   const onDoc = () => hideContextMenu();
-  setTimeout(() => document.addEventListener('click', onDoc, { once: true }), 0);
+  setTimeout(() => document.addEventListener('click', onDoc, {
+    once: true
+  }), 0);
 }
 
 function hideContextMenu() {
   ctxMenu.root.classList.add('hidden');
 }
 // Modal 逻辑
-const modal = {
-  backdrop: document.getElementById('modal-backdrop'),
-  root: document.getElementById('bookmark-modal'),
-  title: document.getElementById('modal-title'),
-  close: document.getElementById('modal-close'),
-  cancel: document.getElementById('modal-cancel'),
-  save: document.getElementById('modal-save'),
-  url: document.getElementById('bm-url'),
-  name: document.getElementById('bm-name'),
-  remark: document.getElementById('bm-remark'),
-  favUrl: document.getElementById('bm-favicon'),
-  fetchStatus: document.getElementById('fetch-status'),
-  favCandidatesWrap: document.getElementById('row-fav-candidates'),
-  favCandidates: document.getElementById('bm-fav-candidates'),
-  letter: document.getElementById('bm-letter'),
-  color: document.getElementById('bm-color'),
-  rowFav: document.getElementById('row-favicon'),
-  rowMono: document.getElementById('row-mono'),
-  previewFav: document.getElementById('preview-fav'),
-  previewMono: document.getElementById('preview-mono'),
-  modeRadios: () => [...document.querySelectorAll('input[name="icon-mode"]')]
-};
 
-let modalCtx = { mode: 'add', bookmarkId: null, folderId: null, subId: null };
-let modalFavCandidates = [];
-
-function openBookmarkModal({ mode, bookmark = null, folderId = null, subId = null }) {
-  modalCtx = { mode, bookmarkId: bookmark?.id || null, folderId: folderId || state.selectedFolderId, subId: subId || state.selectedSubId };
+function openBookmarkModal({
+  mode,
+  bookmark = null,
+  folderId = null,
+  subId = null
+}) {
+  modalCtx = {
+    mode,
+    bookmarkId: bookmark?.id || null,
+    folderId: folderId || state.selectedFolderId,
+    subId: subId || state.selectedSubId
+  };
   modal.title.textContent = mode === 'add' ? '添加书签' : '编辑书签';
   modal.url.value = bookmark?.url || '';
   modal.name.value = bookmark?.name || '';
@@ -621,7 +914,6 @@ function openBookmarkModal({ mode, bookmark = null, folderId = null, subId = nul
   showModal(true);
 }
 
-let modalKeydownHandler = null;
 function showModal(show) {
   modal.backdrop.classList.toggle('hidden', !show);
   modal.root.classList.toggle('hidden', !show);
@@ -642,43 +934,18 @@ function showModal(show) {
   }
 }
 
-modal.close?.addEventListener('click', () => showModal(false));
-modal.cancel?.addEventListener('click', () => showModal(false));
+// Modal事件监听器已移到bindEvents函数中
 
-modal.modeRadios().forEach(r => r.addEventListener('change', () => {
-  applyIconMode(getIconMode());
-  refreshPreview();
-}));
-
-[modal.url, modal.favUrl, modal.letter, modal.color].forEach(el => el?.addEventListener('input', refreshPreview));
 // 网址变化时自动尝试获取网站图标和名称（防抖）
-let fetchTimer = null;
-modal.url?.addEventListener('input', () => {
-  const url = modal.url.value.trim();
-  clearTimeout(fetchTimer);
-  modal.fetchStatus?.classList.add('hidden');
-  
-  if (!url) return;
-  
-  fetchTimer = setTimeout(async () => {
-    modal.fetchStatus?.classList.remove('hidden');
-    
-    try {
-      await Promise.all([
-        doFetchFavicons(url, true),
-        !modal.name.value.trim() ? fetchTitle(url) : Promise.resolve()
-      ]);
-    } finally {
-      setTimeout(() => modal.fetchStatus?.classList.add('hidden'), 1000);
-    }
-  }, 500);
-});
 
-modal.save?.addEventListener('click', async () => {
+async function handleModalSave() {
   const folderId = modalCtx.folderId;
   const subId = modalCtx.subId;
   const url = modal.url.value.trim();
-  if (!url) { alert('请输入网址'); return; }
+  if (!url) {
+    alert('请输入网址');
+    return;
+  }
   const name = modal.name.value.trim() || undefined;
   const remark = modal.remark.value.trim() || '';
   const mode = getIconMode();
@@ -686,29 +953,74 @@ modal.save?.addEventListener('click', async () => {
     if (mode === 'favicon') {
       const iconUrl = modal.favUrl.value.trim() || modalFavCandidates[0] || buildFaviconUrl(url);
       const iconDataUrl = iconUrl ? await toDataUrlSafe(iconUrl) : '';
-      await addBookmark({ folderId, subId, url, name, iconUrl, iconDataUrl, mono: null, remark });
+      await addBookmark({
+        folderId,
+        subId,
+        url,
+        name,
+        iconUrl,
+        iconDataUrl,
+        mono: null,
+        remark
+      });
     } else {
       const letter = (modal.letter.value || (name || url || 'W')[0] || 'W').toUpperCase();
       const color = modal.color.value || pickColorFromString(letter);
-      await addBookmark({ folderId, subId, url, name, iconUrl: '', mono: { letter, color }, remark });
+      await addBookmark({
+        folderId,
+        subId,
+        url,
+        name,
+        iconUrl: '',
+        mono: {
+          letter,
+          color
+        },
+        remark
+      });
     }
   } else {
     const bookmarkId = modalCtx.bookmarkId;
     if (mode === 'favicon') {
       const iconUrl = modal.favUrl.value.trim() || modalFavCandidates[0] || undefined;
       const iconDataUrl = iconUrl ? await toDataUrlSafe(iconUrl) : '';
-      await updateBookmark({ folderId, subId, bookmarkId, url, name, iconType: 'favicon', iconUrl, iconDataUrl });
+      await updateBookmark({
+        folderId,
+        subId,
+        bookmarkId,
+        url,
+        name,
+        iconType: 'favicon',
+        iconUrl,
+        iconDataUrl
+      });
     } else {
       const letter = (modal.letter.value || (name || url || 'W')[0] || 'W').toUpperCase();
       const color = modal.color.value || '#7c5cff';
-      await updateBookmark({ folderId, subId, bookmarkId, url, name, iconType: 'mono', mono: { letter, color } });
+      await updateBookmark({
+        folderId,
+        subId,
+        bookmarkId,
+        url,
+        name,
+        iconType: 'mono',
+        mono: {
+          letter,
+          color
+        }
+      });
     }
     // 同步备注
-    await updateBookmarkRemark({ folderId, subId, bookmarkId, remark });
+    await updateBookmarkRemark({
+      folderId,
+      subId,
+      bookmarkId,
+      remark
+    });
   }
   showModal(false);
   renderBookmarkGrid();
-});
+}
 
 
 
@@ -716,13 +1028,16 @@ modal.save?.addEventListener('click', async () => {
 async function fetchTitle(url) {
   try {
     // 优先使用后台获取
-    const res = await chrome.runtime.sendMessage({ type: 'title:fetch', url });
+    const res = await chrome.runtime.sendMessage({
+      type: 'title:fetch',
+      url
+    });
     if (res?.title) {
       modal.name.value = res.title;
       return;
     }
   } catch (e) {}
-  
+
   // 后台失败时用域名作为备选
   try {
     const u = new URL(url);
@@ -740,14 +1055,22 @@ async function doFetchFavicons(url, isAuto) {
   if (isAuto && favFetchLastUrl === url) return;
   favFetchBusy = true;
   favFetchLastUrl = url;
-  
+
   try {
     let candidates = [];
     try {
       let hasPerm = false;
-      try { const u = new URL(url); hasPerm = await chrome.permissions.contains({ origins: [u.origin + '/*'] }); } catch (e) {}
+      try {
+        const u = new URL(url);
+        hasPerm = await chrome.permissions.contains({
+          origins: [u.origin + '/*']
+        });
+      } catch (e) {}
       if (hasPerm) {
-        const res = await chrome.runtime.sendMessage({ type: 'favicon:fetch', pageUrl: url });
+        const res = await chrome.runtime.sendMessage({
+          type: 'favicon:fetch',
+          pageUrl: url
+        });
         if (res?.ok) candidates = res.icons || [];
       }
     } catch (e) {}
@@ -763,7 +1086,9 @@ async function doFetchFavicons(url, isAuto) {
 
 
 
-function getIconMode() { return modal.modeRadios().find(r => r.checked)?.value || 'favicon'; }
+function getIconMode() {
+  return modal.modeRadios().find(r => r.checked)?.value || 'favicon';
+}
 
 function applyIconMode(mode) {
   const isFav = mode === 'favicon';
@@ -854,7 +1179,9 @@ async function collectFavicons(pageUrl) {
 function testImageLoad(url) {
   return new Promise((resolve) => {
     const img = new Image();
-    const done = (ok) => { resolve(ok ? url : null); };
+    const done = (ok) => {
+      resolve(ok ? url : null);
+    };
     img.onload = () => done(true);
     img.onerror = () => done(false);
     img.src = url + (url.includes('?') ? `&t=${Date.now()}` : `?t=${Date.now()}`);
@@ -863,7 +1190,9 @@ function testImageLoad(url) {
 
 async function toDataUrlSafe(url) {
   try {
-    const res = await fetch(url, { mode: 'no-cors' });
+    const res = await fetch(url, {
+      mode: 'no-cors'
+    });
     // no-cors 响应可能是 opaque，直接读取会失败；退化到 <img> 画布
   } catch (e) {}
   return await imageToDataUrl(url).catch(() => '');
@@ -877,15 +1206,19 @@ function imageToDataUrl(url) {
       try {
         const canvas = document.createElement('canvas');
         const size = 64;
-        canvas.width = size; canvas.height = size;
+        canvas.width = size;
+        canvas.height = size;
         const ctx = canvas.getContext('2d');
-        ctx.clearRect(0,0,size,size);
+        ctx.clearRect(0, 0, size, size);
         // draw contain
         const ratio = Math.min(size / img.width, size / img.height);
-        const w = img.width * ratio; const h = img.height * ratio;
-        ctx.drawImage(img, (size - w)/2, (size - h)/2, w, h);
+        const w = img.width * ratio;
+        const h = img.height * ratio;
+        ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
         resolve(canvas.toDataURL('image/png'));
-      } catch (err) { reject(err); }
+      } catch (err) {
+        reject(err);
+      }
     };
     img.onerror = reject;
     img.src = url + (url.includes('?') ? `&t=${Date.now()}` : `?t=${Date.now()}`);
@@ -909,4 +1242,264 @@ function extractIconsFromHtml(html, base) {
     results.push(url);
   }
   return results;
+}
+
+// 检查云端数据并提示用户
+async function checkCloudDataAndPrompt() {
+  // 防抖：如果距离上次检查不到5秒，则跳过
+  const now = Date.now();
+  if (now - lastCloudCheckTime < 5000) {
+    console.log('跳过云端检查（防抖）');
+    return;
+  }
+  lastCloudCheckTime = now;
+
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: 'cloud:check'
+    });
+    
+    if (!response?.ok) {
+      console.warn('云端检查失败:', response?.error);
+      return;
+    }
+    if (!response?.result?.hasNewerData) {
+      return;
+    }
+
+    const {
+      cloudFile,
+      cloudTime,
+      localTime
+    } = response.result;
+
+    // 显示同步提示
+    const shouldSync = await showSyncPrompt(cloudFile.name, cloudTime, localTime);
+    if (shouldSync) {
+      await syncFromCloudWithFeedback(cloudFile.name);
+    }
+  } catch (e) {
+    console.warn('检查云端数据失败:', e);
+  }
+}
+
+// 显示同步提示弹窗
+async function showSyncPrompt(fileName, cloudTime, localTime) {
+  return new Promise((resolve) => {
+    // 创建同步提示弹窗
+    const syncModal = document.createElement('div');
+    syncModal.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+    `;
+    
+    syncModal.innerHTML = `
+      <div style="
+        background: white;
+        border-radius: 8px;
+        padding: 24px;
+        max-width: 400px;
+        margin: 16px;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+      ">
+        <div style="display: flex; align-items: center; margin-bottom: 16px;">
+          <div style="
+            width: 40px;
+            height: 40px;
+            background: #dbeafe;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 12px;
+          ">
+            <svg width="24" height="24" fill="none" stroke="#2563eb" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"></path>
+            </svg>
+          </div>
+          <h3 style="font-size: 18px; font-weight: 600; color: #111827; margin: 0;">发现云端更新</h3>
+        </div>
+        <div style="margin-bottom: 16px; font-size: 14px; color: #6b7280;">
+          <p style="margin-bottom: 8px;">检测到云端有更新的数据：</p>
+          <div style="background: #f9fafb; padding: 12px; border-radius: 4px; margin-bottom: 8px;">
+            <p style="margin: 4px 0;"><strong>云端文件：</strong>${fileName}</p>
+            <p style="margin: 4px 0;"><strong>云端时间：</strong>${cloudTime}</p>
+            <p style="margin: 4px 0;"><strong>本地时间：</strong>${localTime}</p>
+          </div>
+          <p style="margin-top: 8px; color: #d97706;">
+            <strong>注意：</strong>同步前会自动备份当前本地数据，确保数据安全。
+          </p>
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 12px;">
+          <button id="sync-cancel" style="
+            padding: 8px 16px;
+            color: #6b7280;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            border-radius: 4px;
+          ">
+            稍后再说
+          </button>
+          <button id="sync-confirm" style="
+            padding: 8px 16px;
+            background: #2563eb;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+          ">
+            立即同步
+          </button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(syncModal);
+
+    const cleanup = (result) => {
+      document.body.removeChild(syncModal);
+      resolve(result);
+    };
+
+    syncModal.querySelector('#sync-cancel').addEventListener('click', () => cleanup(false));
+    syncModal.querySelector('#sync-confirm').addEventListener('click', () => cleanup(true));
+
+    // 点击背景关闭
+    syncModal.addEventListener('click', (e) => {
+      if (e.target === syncModal) cleanup(false);
+    });
+  });
+}
+
+// 执行同步并显示反馈
+async function syncFromCloudWithFeedback(fileName) {
+  if (isSyncing) {
+    toast('⚠️ 正在同步中，请稍候...', 2000);
+    return;
+  }
+  
+  isSyncing = true;
+  showGlobalLoading('正在同步云端数据...');
+  
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: 'cloud:sync',
+      fileName
+    });
+
+    if (response?.ok) {
+      // 同步成功，刷新界面
+      await render();
+      hideGlobalLoading();
+      toast('✅ 同步成功！数据已更新', 2000);
+    } else {
+      throw new Error(response?.error || '同步失败');
+    }
+  } catch (e) {
+    hideGlobalLoading();
+    toast(`❌ 同步失败：${e.message}`, 3000);
+    console.error('同步失败:', e);
+  } finally {
+    isSyncing = false;
+  }
+}
+
+// 显示加载提示
+function showLoadingToast(message) {
+  const toast = document.createElement('div');
+  toast.className = 'fixed top-4 right-4 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg z-50 flex items-center';
+  toast.innerHTML = `
+    <svg class="animate-spin -ml-1 mr-3 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+    </svg>
+    ${message}
+  `;
+  document.body.appendChild(toast);
+  return toast;
+}
+
+// 隐藏加载提示
+function hideLoadingToast(toast) {
+  if (toast && toast.parentNode) {
+    toast.parentNode.removeChild(toast);
+  }
+}
+
+// 显示全局loading遮罩
+function showGlobalLoading(message = '正在同步数据...') {
+  if (globalLoading) return globalLoading;
+  
+  globalLoading = document.createElement('div');
+  globalLoading.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 20000;
+    color: white;
+    font-size: 16px;
+  `;
+  
+  globalLoading.innerHTML = `
+    <div style="
+      background: rgba(255, 255, 255, 0.1);
+      padding: 32px;
+      border-radius: 12px;
+      text-align: center;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    ">
+      <div style="
+        width: 40px;
+        height: 40px;
+        border: 3px solid rgba(255, 255, 255, 0.3);
+        border-top: 3px solid white;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 16px;
+      "></div>
+      <div style="font-weight: 500;">${message}</div>
+      <div style="font-size: 14px; opacity: 0.8; margin-top: 8px;">请勿关闭页面或进行其他操作</div>
+    </div>
+    <style>
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+    </style>
+  `;
+  
+  document.body.appendChild(globalLoading);
+  
+  // 禁用页面滚动
+  document.body.style.overflow = 'hidden';
+  
+  return globalLoading;
+}
+
+// 隐藏全局loading遮罩
+function hideGlobalLoading() {
+  if (globalLoading && globalLoading.parentNode) {
+    globalLoading.parentNode.removeChild(globalLoading);
+    globalLoading = null;
+    
+    // 恢复页面滚动
+    document.body.style.overflow = '';
+  }
 }

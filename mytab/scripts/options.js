@@ -11,6 +11,7 @@ const els = {
   test: document.getElementById('btn-test'),
   save: document.getElementById('btn-save'),
   backupNow: document.getElementById('btn-backup-now'),
+  checkCloud: document.getElementById('btn-check-cloud'),
   refresh: document.getElementById('btn-refresh-list'),
   list: document.getElementById('backup-list'),
   bgUrl: document.getElementById('bg-url'),
@@ -74,6 +75,57 @@ function bind() {
       els.backupNow.disabled = false;
       els.backupNow.textContent = '立即备份';
       toast('失败: ' + String(e?.message || e));
+    }
+  });
+
+  els.checkCloud.addEventListener('click', async () => {
+    try {
+      els.checkCloud.disabled = true;
+      const oldText = els.checkCloud.textContent;
+      els.checkCloud.textContent = '检查中…';
+      
+      const res = await chrome.runtime.sendMessage({ type: 'cloud:manual-check' });
+      if (!res?.ok) {
+        throw new Error(res?.error || '检查失败');
+      }
+      
+      if (!res.result) {
+        toast('未配置WebDAV或备份未启用');
+        return;
+      }
+      
+      if (!res.result.hasNewerData) {
+        toast('云端没有更新的数据');
+        return;
+      }
+      
+      const { cloudFile, cloudTime, localTime } = res.result;
+      const shouldSync = confirm(
+        `发现云端更新数据：\n\n` +
+        `云端文件：${cloudFile.name}\n` +
+        `云端时间：${cloudTime}\n` +
+        `本地时间：${localTime}\n\n` +
+        `是否立即同步？（同步前会自动备份当前本地数据）`
+      );
+      
+      if (shouldSync) {
+        const syncRes = await chrome.runtime.sendMessage({ 
+          type: 'cloud:sync', 
+          fileName: cloudFile.name 
+        });
+        
+        if (syncRes?.ok) {
+          toast('同步成功！');
+          await refreshList();
+        } else {
+          throw new Error(syncRes?.error || '同步失败');
+        }
+      }
+    } catch (e) {
+      toast('操作失败: ' + String(e?.message || e));
+    } finally {
+      els.checkCloud.disabled = false;
+      els.checkCloud.textContent = '检查云端更新';
     }
   });
 

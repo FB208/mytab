@@ -10,6 +10,22 @@ chrome.runtime.onInstalled.addListener(async () => {
   await ensureAlarm();
 });
 
+// 插件启动时检查云端数据
+chrome.runtime.onStartup.addListener(async () => {
+  await checkCloudDataOnStartup();
+});
+
+// 扩展激活时也检查（用户打开新标签页时）
+let lastCheckTime = 0;
+chrome.tabs.onActivated.addListener(async () => {
+  // 防止频繁检查，每5分钟最多检查一次
+  const now = Date.now();
+  if (now - lastCheckTime > 5 * 60 * 1000) {
+    lastCheckTime = now;
+    await checkCloudDataOnStartup();
+  }
+});
+
 chrome.storage.onChanged.addListener(async (changes, area) => {
   if (area === 'local' && changes.settings) {
     await ensureAlarm();
@@ -50,7 +66,12 @@ async function doBackup(source = 'manual') {
     const { data, settings } = await readAll();
     if (!settings?.webdav?.url) return;
     const client = new WebDAVClient(settings.webdav);
-    const prefixMap = { alarm: 'snapshot_schedule', manual: 'snapshot_user', auto: 'snapshot_handle' };
+    const prefixMap = { 
+      alarm: 'snapshot_schedule', 
+      manual: 'snapshot_user', 
+      auto: 'snapshot_handle',
+      sync_backup: 'sync_backup' // 同步前的安全备份
+    };
     const prefix = prefixMap[source] || 'snapshot_user';
     const name = `${prefix}_${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
     // 在 worker 内避免被缓存污染：重新读取并深拷贝
@@ -73,14 +94,18 @@ async function doBackup(source = 'manual') {
         await client.remove(f.name);
       }
     }
-    chrome.notifications.create({
-      type: 'basic', iconUrl: 'icon128.png', title: 'MyTab 备份成功', message: `已备份：${name}`
-    }, () => {});
+    if (source !== 'sync_backup') { // 同步备份不显示通知
+      chrome.notifications.create({
+        type: 'basic', iconUrl: 'icon128.png', title: 'MyTab 备份成功', message: `已备份：${name}`
+      }, () => {});
+    }
   } catch (e) {
     console.warn('备份失败', e);
-    chrome.notifications.create({
-      type: 'basic', iconUrl: 'icon128.png', title: 'MyTab 备份失败', message: String(e?.message || e)
-    }, () => {});
+    if (source !== 'sync_backup') { // 同步备份失败也不显示通知，避免干扰
+      chrome.notifications.create({
+        type: 'basic', iconUrl: 'icon128.png', title: 'MyTab 备份失败', message: String(e?.message || e)
+      }, () => {});
+    }
   }
 }
 
@@ -132,6 +157,22 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const client = new WebDAVClient(config);
         await client.ensureBase();
         sendResponse({ ok: true });
+        return;
+      }
+      if (msg?.type === 'cloud:check') {
+        const result = await checkCloudDataOnStartup();
+        sendResponse({ ok: true, result });
+        return;
+      }
+      if (msg?.type === 'cloud:sync') {
+        const { fileName } = msg;
+        const result = await syncFromCloud(fileName);
+        sendResponse({ ok: true, result });
+        return;
+      }
+      if (msg?.type === 'cloud:manual-check') {
+        const result = await checkCloudDataOnStartup();
+        sendResponse({ ok: true, result });
         return;
       }
     } catch (e) {
@@ -225,6 +266,127 @@ async function fetchTitle(url) {
     return match ? match[1].trim() : '';
   } catch (e) {
     return '';
+  }
+}
+
+// 检查云端是否有更新的数据
+async function checkCloudDataOnStartup() {
+  try {
+    const { data: localData, settings } = await readAll();
+    if (!settings?.webdav?.url || !settings?.backup?.enabled) {
+      return null;
+    }
+    
+    const client = new WebDAVClient(settings.webdav);
+    await client.ensureBase();
+    const files = await client.list();
+    
+    // 过滤掉同步备份文件（sync_backup前缀），只比较真实的数据快照
+    const validFiles = files.filter(f => 
+      f.name.endsWith('.json') && 
+      !f.name.startsWith('sync_backup_')
+    );
+    
+    if (validFiles.length === 0) return null;
+    
+    // 找到最新的云端文件
+    const latestCloudFile = validFiles.sort((a, b) => b.lastmod - a.lastmod)[0];
+    
+    // 获取本地数据的最后修改时间（使用数据中的时间戳或当前时间）
+    const localTimestamp = getLocalDataTimestamp(localData);
+    
+    // 如果云端文件比本地数据新，返回提示信息
+    // 添加时间差阈值，避免因为微小的时间差异导致误判
+    const timeDiff = latestCloudFile.lastmod - localTimestamp;
+    const threshold = 2000; // 2秒阈值
+    
+    if (timeDiff > threshold) {
+      return {
+        hasNewerData: true,
+        cloudFile: latestCloudFile,
+        cloudTime: new Date(latestCloudFile.lastmod).toLocaleString(),
+        localTime: new Date(localTimestamp).toLocaleString()
+      };
+    }
+    
+    return { hasNewerData: false };
+  } catch (e) {
+    console.warn('检查云端数据失败:', e);
+    return null;
+  }
+}
+
+// 获取本地数据的时间戳
+function getLocalDataTimestamp(localData) {
+  // 尝试从数据中获取最后修改时间
+  if (localData?.lastModified) {
+    return localData.lastModified;
+  }
+  
+  // 如果没有时间戳，使用文件夹或书签的最新创建/修改时间
+  let latestTime = 0;
+  if (localData?.folders) {
+    localData.folders.forEach(folder => {
+      if (folder.createdAt) latestTime = Math.max(latestTime, folder.createdAt);
+      if (folder.updatedAt) latestTime = Math.max(latestTime, folder.updatedAt);
+      
+      if (folder.bookmarks) {
+        folder.bookmarks.forEach(bookmark => {
+          if (bookmark.createdAt) latestTime = Math.max(latestTime, bookmark.createdAt);
+          if (bookmark.updatedAt) latestTime = Math.max(latestTime, bookmark.updatedAt);
+        });
+      }
+      
+      if (folder.subfolders) {
+        folder.subfolders.forEach(subfolder => {
+          if (subfolder.createdAt) latestTime = Math.max(latestTime, subfolder.createdAt);
+          if (subfolder.updatedAt) latestTime = Math.max(latestTime, subfolder.updatedAt);
+          
+          if (subfolder.bookmarks) {
+            subfolder.bookmarks.forEach(bookmark => {
+              if (bookmark.createdAt) latestTime = Math.max(latestTime, bookmark.createdAt);
+              if (bookmark.updatedAt) latestTime = Math.max(latestTime, bookmark.updatedAt);
+            });
+          }
+        });
+      }
+    });
+  }
+  
+  // 如果找不到任何时间戳，返回一个很早的时间，确保云端数据会被认为是更新的
+  return latestTime || new Date('2020-01-01').getTime();
+}
+
+// 从云端同步数据
+async function syncFromCloud(fileName) {
+  try {
+    const { settings } = await readAll();
+    if (!settings?.webdav?.url) throw new Error('WebDAV未配置');
+    
+    const client = new WebDAVClient(settings.webdav);
+    
+    // 同步前先备份当前本地数据（使用特殊前缀）
+    await doBackup('sync_backup');
+    
+    // 下载云端数据
+    const cloudData = await client.downloadJSON(fileName);
+    const restored = cloudData?.data || {};
+    
+    // 添加同步时间戳
+    restored.lastModified = Date.now();
+    restored.syncedFrom = fileName;
+    restored.syncedAt = new Date().toISOString();
+    
+    // 覆盖本地数据
+    await chrome.storage.local.set({ data: restored });
+    
+    // 通知前端数据已更改
+    chrome.runtime.sendMessage({ type: 'data:changed' }).catch(() => {});
+    
+    return { success: true, fileName, syncedAt: restored.syncedAt };
+  } catch (e) {
+    console.error('同步失败:', e);
+    throw e;
   }
 }
 
