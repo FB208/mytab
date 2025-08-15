@@ -18,13 +18,13 @@
           <h3 class="options-block-title">WebDAV</h3>
           <div class="options-grid-2">
             <label class="options-field">URL
-              <input id="dav-url" class="search" placeholder="https://dav.example.com/remote.php/dav/files/xxx/mytab/" />
+              <input id="dav-url" class="search" placeholder="https://dav.example.com/remote.php/dav/files/xxx/mytab/" autocomplete="off" />
             </label>
             <label class="options-field">用户名
-              <input id="dav-username" class="search" />
+              <input id="dav-username" class="search" autocomplete="off" />
             </label>
             <label class="options-field">密码
-              <input id="dav-password" class="search" type="password" />
+              <input id="dav-password" class="search" type="password" autocomplete="off" />
             </label>
             <div class="options-actions">
               <button id="btn-test" class="primary-btn">测试连接</button>
@@ -40,10 +40,10 @@
           </div>
           <div class="options-row">
             <label class="options-field">频率（小时）
-              <input id="backup-hours" class="search options-input-sm" type="number" min="0.25" step="0.25" />
+              <input id="backup-hours" class="search options-input-sm" type="number" min="0.25" step="0.25" autocomplete="off" />
             </label>
             <label class="options-field">历史上限
-              <input id="backup-max" class="search options-input-sm" type="number" min="1" step="1" />
+              <input id="backup-max" class="search options-input-sm" type="number" min="1" step="1" autocomplete="off" />
             </label>
           </div>
           <div class="options-row">
@@ -62,7 +62,7 @@
         <div class="options-block">
           <h3 class="options-block-title">背景图片</h3>
           <div class="options-row">
-            <input id="bg-url" class="search options-wide" placeholder="输入图片 URL" />
+            <input id="bg-url" class="search options-wide" placeholder="输入图片 URL" autocomplete="off" />
             <button id="btn-bg-save" class="ghost-btn">保存背景</button>
           </div>
         </div>
