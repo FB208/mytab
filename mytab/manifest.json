@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "MyTab - WebDAV 同步书签面板",
-  "version": "0.1.1",
-  "description": "一个简洁美观的新标签页书签面板，支持自定义 WebDAV 备份与历史记录恢复，确保你永远不会丢失自己的收藏。",
+  "version": "0.2.1",
+  "description": "一个简洁、美观、轻量、免费的新标签页面板，支持自定义 WebDAV 备份与历史记录恢复，确保你永远不会丢失自己的收藏。",
   "chrome_url_overrides": {
     "newtab": "index.html"
   },
