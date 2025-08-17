@@ -7,6 +7,7 @@ import {
   addSubfolder,
   renameSubfolder,
   deleteSubfolder,
+  moveSubfolder,
   addBookmark,
   deleteBookmark,
   buildFaviconUrl,
@@ -22,6 +23,12 @@ let state = {
   selectedFolderId: null,
   selectedSubId: null,
   keyword: ''
+};
+
+// 拖拽状态跟踪
+let dragState = {
+  type: null, // 'bookmark' 或 'subfolder'
+  data: null
 };
 
 // Modal相关变量
@@ -301,15 +308,43 @@ async function renderFolderList() {
     el.querySelector('.icon').textContent = folder.icon || '📁';
     el.querySelector('.name').textContent = folder.name;
     if (folder.id === state.selectedFolderId) el.classList.add('active');
-    // 作为拖拽目标：允许放置书签，移动到该一级文件夹
+    // 作为拖拽目标：允许放置书签和二级文件夹，移动到该一级文件夹
     el.addEventListener('dragover', (ev) => {
       ev.preventDefault();
       ev.dataTransfer.dropEffect = 'move';
     });
     el.addEventListener('drop', async (ev) => {
       ev.preventDefault();
-      const bookmarkId = ev.dataTransfer.getData('text/plain');
-      if (!bookmarkId) return;
+      const dragData = ev.dataTransfer.getData('text/plain');
+      if (!dragData) return;
+      
+      // 处理二级文件夹拖拽
+      if (dragData.startsWith('subfolder:')) {
+        const subId = dragData.replace('subfolder:', '');
+        if (!state.selectedFolderId || state.selectedFolderId === folder.id) return;
+        
+        const ok = await moveSubfolder({
+          sourceParentId: state.selectedFolderId,
+          subId: subId,
+          targetParentId: folder.id
+        });
+        
+        if (ok) {
+          // 如果当前选中的是被移动的子文件夹，清除选中状态
+          if (state.selectedSubId === subId) {
+            state.selectedSubId = null;
+            const header = document.getElementById('current-folder-name');
+            const currentFolder = (await readAll()).data.folders.find(f => f.id === state.selectedFolderId);
+            if (header && currentFolder) header.textContent = currentFolder.name;
+          }
+          renderSubfolders();
+          renderBookmarkGrid();
+        }
+        return;
+      }
+      
+      // 处理书签拖拽
+      const bookmarkId = dragData;
       const {
         data
       } = await readAll();
@@ -386,14 +421,43 @@ async function renderSubfolders() {
     el.dataset.id = sub.id;
     el.querySelector('.name').textContent = sub.name;
     if (state.selectedSubId === sub.id) el.classList.add('active');
+    
+    // 设置为可拖拽
+    el.setAttribute('draggable', 'true');
+    
+    // 拖拽开始：设置拖拽数据
+    el.addEventListener('dragstart', (ev) => {
+      dragState.type = 'subfolder';
+      dragState.data = sub.id;
+      ev.dataTransfer.setData('text/plain', `subfolder:${sub.id}`);
+      ev.dataTransfer.effectAllowed = 'move';
+    });
+    
+    // 拖拽结束：清理状态
+    el.addEventListener('dragend', () => {
+      dragState.type = null;
+      dragState.data = null;
+    });
+    
     // 作为拖拽目标：允许放置书签，移动到该二级文件夹
     el.addEventListener('dragover', (ev) => {
       ev.preventDefault();
-      ev.dataTransfer.dropEffect = 'move';
+      // 只允许书签拖拽到子文件夹，不允许子文件夹拖拽到子文件夹
+      if (dragState.type === 'bookmark') {
+        ev.dataTransfer.dropEffect = 'move';
+      } else {
+        ev.dataTransfer.dropEffect = 'none';
+      }
     });
     el.addEventListener('drop', async (ev) => {
       ev.preventDefault();
-      const bookmarkId = ev.dataTransfer.getData('text/plain');
+      const dragData = ev.dataTransfer.getData('text/plain');
+      
+      // 如果是子文件夹拖拽，不处理
+      if (dragData.startsWith('subfolder:')) return;
+      
+      // 处理书签拖拽
+      const bookmarkId = dragData;
       if (!bookmarkId) return;
       const ok = await moveBookmark({
         sourceFolderId: state.selectedFolderId,
@@ -470,14 +534,43 @@ async function renderBookmarkGrid() {
       mono.querySelector('.letter').textContent = '📁';
       const titleEl = el.querySelector('.title');
       if (titleEl) titleEl.textContent = sub.name;
+      
+      // 设置为可拖拽
+      el.setAttribute('draggable', 'true');
+      
+      // 拖拽开始：设置拖拽数据
+      el.addEventListener('dragstart', (ev) => {
+        dragState.type = 'subfolder';
+        dragState.data = sub.id;
+        ev.dataTransfer.setData('text/plain', `subfolder:${sub.id}`);
+        ev.dataTransfer.effectAllowed = 'move';
+      });
+      
+      // 拖拽结束：清理状态
+      el.addEventListener('dragend', () => {
+        dragState.type = null;
+        dragState.data = null;
+      });
+      
       // 接受拖拽：把书签移入该二级文件夹
       el.addEventListener('dragover', (ev) => {
         ev.preventDefault();
-        ev.dataTransfer.dropEffect = 'move';
+        // 只允许书签拖拽到子文件夹，不允许子文件夹拖拽到子文件夹
+        if (dragState.type === 'bookmark') {
+          ev.dataTransfer.dropEffect = 'move';
+        } else {
+          ev.dataTransfer.dropEffect = 'none';
+        }
       });
       el.addEventListener('drop', async (ev) => {
         ev.preventDefault();
-        const bookmarkId = ev.dataTransfer.getData('text/plain');
+        const dragData = ev.dataTransfer.getData('text/plain');
+        
+        // 如果是子文件夹拖拽，不处理
+        if (dragData.startsWith('subfolder:')) return;
+        
+        // 处理书签拖拽
+        const bookmarkId = dragData;
         if (!bookmarkId) return;
         const ok = await moveBookmark({
           sourceFolderId: state.selectedFolderId,
@@ -565,8 +658,16 @@ async function renderBookmarkGrid() {
     // 拖拽属性
     el.setAttribute('draggable', 'true');
     el.addEventListener('dragstart', (ev) => {
+      dragState.type = 'bookmark';
+      dragState.data = bm.id;
       ev.dataTransfer.setData('text/plain', bm.id);
       ev.dataTransfer.effectAllowed = 'move';
+    });
+    
+    // 拖拽结束：清理状态
+    el.addEventListener('dragend', () => {
+      dragState.type = null;
+      dragState.data = null;
     });
     el.addEventListener('dragover', (ev) => {
       ev.preventDefault();

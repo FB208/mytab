@@ -464,6 +464,48 @@ export async function updateBookmarkRemark({
 
 /**
  * ===========================================
+ * 业务操作：子文件夹移动
+ * ===========================================
+ */
+
+/**
+ * 移动子文件夹到目标一级文件夹
+ * @param {Object} params - 参数对象
+ * @param {string} params.sourceParentId - 源一级文件夹ID
+ * @param {string} params.subId - 要移动的子文件夹ID
+ * @param {string} params.targetParentId - 目标一级文件夹ID
+ * @returns {Promise<boolean>} 移动是否成功
+ */
+export async function moveSubfolder({
+  sourceParentId,
+  subId,
+  targetParentId
+}) {
+  const data = await readData();
+  const sourceFolder = data.folders.find(f => f.id === sourceParentId);
+  const targetFolder = data.folders.find(f => f.id === targetParentId);
+
+  if (!sourceFolder || !targetFolder) return false; // 源或目标文件夹不存在
+  if (sourceParentId === targetParentId) return false; // 源和目标相同
+
+  const subIdx = (sourceFolder.subfolders || []).findIndex(s => s.id === subId);
+  if (subIdx < 0) return false; // 子文件夹不存在
+
+  // 从源文件夹移除子文件夹
+  const [subfolder] = sourceFolder.subfolders.splice(subIdx, 1);
+
+  // 添加到目标文件夹
+  targetFolder.subfolders = targetFolder.subfolders || [];
+  targetFolder.subfolders.push(subfolder);
+
+  data.lastModified = Date.now();
+  await writeData(data);
+  notifyChanged();
+  return true;
+}
+
+/**
+ * ===========================================
  * 业务操作：书签移动和排序
  * ===========================================
  */
