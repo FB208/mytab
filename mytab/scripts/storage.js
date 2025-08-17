@@ -325,30 +325,7 @@ export async function addBookmark({
   return bookmark;
 }
 
-/**
- * 重命名书签
- * @param {Object} params - 参数对象
- * @param {string} params.folderId - 文件夹ID
- * @param {string} [params.subId] - 子文件夹ID（可选）
- * @param {string} params.bookmarkId - 书签ID
- * @param {string} params.name - 新的书签名称
- */
-export async function renameBookmark({
-  folderId,
-  subId,
-  bookmarkId,
-  name
-}) {
-  const data = await readData();
-  const target = locateContainer(data, folderId, subId);
-  const bm = target?.bookmarks?.find(b => b.id === bookmarkId);
-  if (!bm) return; // 书签不存在则返回
 
-  bm.name = name;
-  data.lastModified = Date.now();
-  await writeData(data);
-  notifyChanged();
-}
 
 /**
  * 删除书签
@@ -407,32 +384,6 @@ export async function updateBookmarkMono({
   notifyChanged();
 }
 
-/**
- * 更新书签为网站图标
- * @param {Object} params - 参数对象
- * @param {string} params.folderId - 文件夹ID
- * @param {string} [params.subId] - 子文件夹ID（可选）
- * @param {string} params.bookmarkId - 书签ID
- * @param {string} [params.iconUrl] - 图标URL，默认根据书签URL构建favicon地址
- */
-export async function updateBookmarkFavicon({
-  folderId,
-  subId,
-  bookmarkId,
-  iconUrl
-}) {
-  const data = await readData();
-  const target = locateContainer(data, folderId, subId);
-  const bm = target?.bookmarks?.find(b => b.id === bookmarkId);
-  if (!bm) return; // 书签不存在则返回
-
-  bm.iconType = 'favicon'; // 设置图标类型为网站图标
-  bm.iconUrl = iconUrl || buildFaviconUrl(bm.url); // 设置图标URL
-  bm.mono = null; // 清空单色图标配置
-  data.lastModified = Date.now();
-  await writeData(data);
-  notifyChanged();
-}
 
 /**
  * 更新书签信息（通用更新方法）
