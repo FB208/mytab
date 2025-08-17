@@ -1,2 +1,9 @@
 {
-}
+    "editor.formatOnSave": false,
+    "editor.codeActionsOnSave": {
+      "source.fixAll": false
+    },
+    "javascript.format.enable": false,
+    "typescript.format.enable": false
+  }
+  
