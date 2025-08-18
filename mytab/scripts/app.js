@@ -1264,32 +1264,18 @@ function renderFavCandidates(urls) {
   }
 }
 
+// 使用统一的图标获取逻辑（从favicon-utils.js导入）
 async function collectFavicons(pageUrl) {
-  try {
-    const u = new URL(pageUrl);
-    const origin = u.origin;
-    const host = u.hostname;
-    const common = [
-      '/favicon.ico',
-      '/favicon.png',
-      '/favicon-32x32.png',
-      '/favicon-16x16.png',
-      '/apple-touch-icon.png',
-      '/apple-touch-icon-precomposed.png',
-      '/android-chrome-192x192.png',
-      '/android-chrome-512x512.png'
-    ].map(p => origin + p);
-    const s2 = [
-      `https://www.google.com/s2/favicons?sz=64&domain=${host}`,
-      `https://www.google.com/s2/favicons?sz=128&domain_url=${encodeURIComponent(pageUrl)}`,
-      `https://icons.duckduckgo.com/ip3/${host}.ico`
-    ];
-    const candidates = [...new Set([...common, ...s2])];
-    const results = await Promise.all(candidates.map(testImageLoad));
-    return results.filter(Boolean);
-  } catch (e) {
-    return [];
-  }
+  // 导入共享的图标获取函数
+  const { collectFavicons: sharedCollectFavicons } = await import('./favicon-utils.js');
+  
+  // 图标验证函数：在浏览器环境中测试图片加载
+  const validateIcon = async (href) => {
+    return await testImageLoad(href);
+  };
+
+  // 使用统一的图标收集逻辑
+  return await sharedCollectFavicons(pageUrl, fetch, validateIcon);
 }
 
 

@@ -10,6 +10,7 @@
 
 import { DEFAULT_SETTINGS, readAll, writeSettings } from '../scripts/storage.js';
 import { WebDAVClient } from '../scripts/webdav.js';
+import { collectFavicons } from '../scripts/favicon-utils.js';
 
 /**
  * 扩展安装/更新时的初始化处理
@@ -366,78 +367,14 @@ function stripIconDataUrls(data) {
 
 /**
  * 后台收集网站favicon图标的完整流程
- * 通过多种策略获取高质量图标，包括标准路径、HTML解析、备用方案
+ * 使用统一的图标获取逻辑，支持图标验证
  * 
  * @param {string} pageUrl - 目标网站的完整URL
  * @returns {Promise<string[]>} - 返回图标URL数组，按优先级排序
  */
 async function collectFaviconsInBg(pageUrl) {
-  // 解析目标URL，提取基础信息
-  const u = new URL(pageUrl);
-  const origin = u.origin;
-  
-  /**
-   * 将相对路径转换为绝对路径
-   * 处理各种相对路径格式：//, /, ./
-   */
-  const abs = (href) => {
-    if (!href) return '';
-    if (/^https?:\/\//i.test(href)) return href;  // 已经是绝对路径
-    if (href.startsWith('//')) return u.protocol + href;  // 协议相对路径
-    if (href.startsWith('/')) return origin + href;  // 根相对路径
-    return origin + '/' + href.replace(/^\./, '');  // 相对当前目录
-  };
-
-  // 图标URL集合，使用Set去重
-  const icons = new Set();
-  
-  // 第一步：添加标准图标路径（无需网络请求）
-  [
-    '/favicon.ico',                    // 标准favicon
-    '/favicon.png',                    // PNG格式favicon
-    '/apple-touch-icon.png',           // Apple触摸图标
-    '/apple-touch-icon-precomposed.png' // Apple预合成图标
-  ].forEach(p => icons.add(origin + p));
-
-  try {
-    // 第二步：从HTML页面中提取图标声明
-    const html = await fetch(pageUrl, { method: 'GET' }).then(r => r.text());
-    
-    // 解析<link>标签中的图标声明
-    const linkRe = /<link[^>]+>/gi; let m;
-    while ((m = linkRe.exec(html)) !== null) {
-      const tag = m[0];
-      const rel = /rel=["']([^"']+)["']/i.exec(tag)?.[1]?.toLowerCase() || '';
-      
-      // 过滤图标相关的rel属性
-      if (!/(icon|shortcut icon|apple-touch-icon)/.test(rel)) continue;
-      
-      const href = /href=["']([^"']+)["']/i.exec(tag)?.[1];
-      if (href) icons.add(abs(href));
-    }
-    
-    // 解析Open Graph图片（通常用作图标备选）
-    const og = /<meta[^>]+property=["']og:image["'][^>]*>/gi;
-    let m2; 
-    while ((m2 = og.exec(html)) !== null) {
-      const tag = m2[0];
-      const content = /content=["']([^"']+)["']/i.exec(tag)?.[1];
-      if (content) icons.add(abs(content));
-    }
-    
-    // 解析页面中的logo图片
-    const logoRe = /<img[^>]+src=["']([^"']+logo[^"']+)["']/gi;
-    let m3;
-    while ((m3 = logoRe.exec(html)) !== null) {
-      icons.add(abs(m3[1]));
-    }
-  } catch (e) {
-    // 页面获取失败时，只使用标准路径
-    console.warn('获取页面HTML失败，使用标准图标路径', e);
-  }
-
-  // 第三步：验证图标有效性（过滤无效或过大的图标）
-  const checks = await Promise.all([...icons].map(async (href) => {
+  // 图标验证函数：检查图标是否有效
+  const validateIcon = async (href) => {
     try {
       const res = await fetch(href, { method: 'HEAD' });
       const contentType = res.headers.get('content-type') || '';
@@ -450,20 +387,10 @@ async function collectFaviconsInBg(pageUrl) {
       // 请求失败，忽略此图标
     }
     return null;
-  }));
+  };
 
-  // 第四步：添加Google S2服务作为备选方案
-  const domain = u.hostname;
-  const googleS2Icons = [
-    `https://www.google.com/s2/favicons?sz=64&domain=${domain}`,
-    `https://www.google.com/s2/favicons?sz=128&domain_url=${encodeURIComponent(pageUrl)}`
-  ];
-
-  // 合并所有图标URL并去重，按优先级排序
-  return [...new Set([
-    ...checks.filter(Boolean),  // 验证有效的图标
-    ...googleS2Icons            // Google S2备选图标
-  ])];
+  // 使用统一的图标收集逻辑，并提供验证函数
+  return await collectFavicons(pageUrl, fetch, validateIcon);
 }
 
 /**

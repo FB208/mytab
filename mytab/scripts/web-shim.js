@@ -184,51 +184,23 @@
 
   async function collectFaviconsInPage(pageUrl) {
     try {
-      const u = new URL(pageUrl);
-      const origin = u.origin;
-      const abs = (href) => {
-        if (!href) return '';
-        if (/^https?:\/\//i.test(href)) return href;
-        if (href.startsWith('//')) return u.protocol + href;
-        if (href.startsWith('/')) return origin + href;
-        return origin + '/' + href.replace(/^\./, '');
-      };
-      const icons = new Set();
-      ['/favicon.ico','/favicon.png','/apple-touch-icon.png','/apple-touch-icon-precomposed.png']
-        .forEach(p => icons.add(origin + p));
-      const html = await fetch(pageUrl, { method: 'GET' }).then(r => r.text());
-      const linkRe = /<link[^>]+>/gi; let m;
-      while ((m = linkRe.exec(html)) !== null) {
-        const tag = m[0];
-        const rel = /rel=["']([^"']+)["']/i.exec(tag)?.[1]?.toLowerCase() || '';
-        if (!/(icon|shortcut icon|apple-touch-icon)/.test(rel)) continue;
-        const href = /href=["']([^"']+)["']/i.exec(tag)?.[1];
-        if (href) icons.add(abs(href));
-      }
-      const og = /<meta[^>]+property=["']og:image["'][^>]*>/gi; let m2;
-      while ((m2 = og.exec(html)) !== null) {
-        const tag = m2[0];
-        const content = /content=["']([^"']+)["']/i.exec(tag)?.[1];
-        if (content) icons.add(abs(content));
-      }
-      const logoRe = /<img[^>]+src=["']([^"']+logo[^"']+)["']/gi; let m3;
-      while ((m3 = logoRe.exec(html)) !== null) icons.add(abs(m3[1]));
-
-      const checks = await Promise.all([...icons].map(async (href) => {
+      // 动态导入共享的图标获取函数
+      const { collectFavicons } = await import('./favicon-utils.js');
+      
+      // 图标验证函数：在Web环境中验证图标
+      const validateIcon = async (href) => {
         try {
           const res = await fetch(href, { method: 'HEAD' });
           const ct = res.headers.get('content-type') || '';
           if (res.ok && /image\//.test(ct)) return href;
         } catch (e) {}
         return null;
-      }));
-      const domain = u.hostname;
-      const s2 = [
-        `https://www.google.com/s2/favicons?sz=64&domain=${domain}`,
-        `https://www.google.com/s2/favicons?sz=128&domain_url=${encodeURIComponent(pageUrl)}`
-      ];
-      return [...new Set([...checks.filter(Boolean), ...s2])];
+      };
+
+      // 使用统一的图标收集逻辑
+      return await collectFavicons(pageUrl, fetch, validateIcon);
     } catch (e) {
+      console.warn('图标收集失败:', e);
       return [];
     }
   }
