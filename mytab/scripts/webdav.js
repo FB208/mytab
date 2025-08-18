@@ -592,13 +592,40 @@ function davFetch(targetUrl, options) {
   }
   
   // 扩展模式或代理失败时，直接连接到目标 URL
-  return fetch(targetUrl, options)
+  // 在Chrome扩展环境中，添加额外的选项来处理CORS
+  const fetchOptions = {
+    ...options,
+    // 确保在扩展环境中不检查CORS（Chrome扩展有自己的权限系统）
+    mode: 'cors',
+    credentials: 'omit' // 不发送cookies，避免额外的CORS问题
+  };
+  
+  // 如果有自定义headers，确保它们被正确设置
+  if (options?.headers) {
+    fetchOptions.headers = {
+      ...options.headers
+    };
+  }
+  
+  return fetch(targetUrl, fetchOptions)
     .then(res => {
       requestTimer({ status: res.status, mode: 'direct' });
       return res;
     })
     .catch(err => {
       requestTimer(null, err);
+      // 提供更详细的错误信息
+      if (err.message.includes('Failed to fetch')) {
+        const enhancedError = new Error(
+          `无法连接到WebDAV服务器: ${targetUrl}\n` +
+          `请确保：\n` +
+          `1. URL地址正确\n` +
+          `2. 服务器正在运行\n` +
+          `3. 用户名密码正确\n` +
+          `原始错误: ${err.message}`
+        );
+        throw enhancedError;
+      }
       throw err;
     });
 }

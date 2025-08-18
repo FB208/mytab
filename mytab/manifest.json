@@ -12,7 +12,7 @@
     "notifications",
     "unlimitedStorage"
   ],
-  "optional_host_permissions": [
+  "host_permissions": [
     "https://*/*",
     "http://*/*"
   ],
