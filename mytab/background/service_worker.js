@@ -24,28 +24,6 @@ chrome.runtime.onInstalled.addListener(async () => {
 });
 
 /**
- * 浏览器启动时的处理
- * 检查是否有新的云端数据需要同步
- */
-chrome.runtime.onStartup.addListener(async () => {
-  await checkCloudDataOnStartup();
-});
-
-/**
- * 标签页激活时的处理
- * 用户切换/打开新标签页时检查云端更新，防止频繁检查
- */
-let lastCheckTime = 0;
-chrome.tabs.onActivated.addListener(async () => {
-  // 防抖机制：5分钟内最多检查一次
-  const now = Date.now();
-  if (now - lastCheckTime > 5 * 60 * 1000) {
-    lastCheckTime = now;
-    await checkCloudDataOnStartup();
-  }
-});
-
-/**
  * 本地存储变化监听
  * 当设置或数据发生变化时的处理逻辑
  */
@@ -94,21 +72,57 @@ async function ensureAlarm() {
 }
 
 /**
- * 防抖备份调度器
- * 防止短时间内多次触发备份操作，提高性能
+ * 通用防抖调度器
+ * 统一管理所有需要防抖的操作
  */
-let backupTimer = null;  // 防抖定时器
-let backupSource = 'auto';  // 备份来源标识
+class DebounceScheduler {
+  constructor() {
+    this.timers = new Map(); // 存储不同操作的定时器
+  }
+
+  /**
+   * 调度防抖任务
+   * @param {string} key - 任务标识符
+   * @param {Function} fn - 要执行的函数
+   * @param {number} delay - 防抖延迟时间（毫秒）
+   */
+  schedule(key, fn, delay) {
+    // 清除之前的定时器
+    if (this.timers.has(key)) {
+      clearTimeout(this.timers.get(key));
+    }
+    
+    // 设置新的定时器
+    const timer = setTimeout(() => {
+      this.timers.delete(key);
+      fn();
+    }, delay);
+    
+    this.timers.set(key, timer);
+  }
+
+  /**
+   * 取消指定的防抖任务
+   * @param {string} key - 任务标识符
+   */
+  cancel(key) {
+    if (this.timers.has(key)) {
+      clearTimeout(this.timers.get(key));
+      this.timers.delete(key);
+    }
+  }
+}
+
+// 创建全局防抖调度器实例
+const debouncer = new DebounceScheduler();
 
 /**
  * 调度备份任务（带防抖功能）
  * @param {string} source - 备份来源：'auto'|'manual'|'alarm'|'sync_backup'
  */
 function scheduleBackup(source = 'auto') {
-  clearTimeout(backupTimer);  // 清除之前的定时器
-  backupSource = source;
-  // 4秒防抖：等待用户操作完成后才执行备份
-  backupTimer = setTimeout(() => doBackup(backupSource), 4000);
+  // 使用统一的防抖调度器，4秒防抖
+  debouncer.schedule('backup', () => doBackup(source), 4000);
 }
 
 /**
@@ -288,7 +302,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         return;
       }
       
-      // 检查云端是否有更新数据
+      // 检查云端是否有更新数据（仅在用户主动请求时执行）
       if (msg?.type === 'cloud:check') {
         const result = await checkCloudDataOnStartup();
         sendResponse({ ok: true, result });

@@ -42,8 +42,7 @@ let modalCtx = {
 let modalFavCandidates = [];
 let fetchTimer = null;
 let modalKeydownHandler = null;
-let cloudCheckTimer = null;
-let lastCloudCheckTime = 0;
+let hasCheckedCloudOnStartup = false;
 let globalLoading = null;
 let isSyncing = false;
 
@@ -1363,15 +1362,14 @@ function extractIconsFromHtml(html, base) {
   return results;
 }
 
-// 检查云端数据并提示用户
+// 检查云端数据并提示用户（仅在页面首次加载时执行）
 async function checkCloudDataAndPrompt() {
-  // 防抖：如果距离上次检查不到5秒，则跳过
-  const now = Date.now();
-  if (now - lastCloudCheckTime < 5000) {
-    console.log('跳过云端检查（防抖）');
+  // 确保只在页面首次加载时执行一次
+  if (hasCheckedCloudOnStartup) {
+    console.log('跳过云端检查（已在启动时检查过）');
     return;
   }
-  lastCloudCheckTime = now;
+  hasCheckedCloudOnStartup = true;
 
   try {
     const response = await chrome.runtime.sendMessage({
