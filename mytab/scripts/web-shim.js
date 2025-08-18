@@ -135,14 +135,18 @@
     const client = await getWebDavClient(settings.webdav);
     const prefixMap = { alarm: 'snapshot_schedule', manual: 'snapshot_user', auto: 'snapshot_handle' };
     const prefix = prefixMap[source] || 'snapshot_user';
-    const name = `${prefix}_${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+    
+    // 直接使用时间戳数字作为文件名，避免时区转换问题
+    const dataTimestamp = data?.lastModified || Date.now();
+    const name = `${prefix}_${dataTimestamp}.json`;
+    
     const cleanData = JSON.parse(JSON.stringify(data || {}));
     if (cleanData && typeof cleanData === 'object') {
       if (cleanData.history) delete cleanData.history;
       if (cleanData.settings) delete cleanData.settings;
       try { stripIconDataUrls(cleanData); } catch (e) {}
     }
-    const payload = { version: 1, ts: Date.now(), data: cleanData };
+    const payload = { version: 1, ts: dataTimestamp, data: cleanData };
     await client.ensureBase();
     await client.uploadJSON(name, payload);
     const files = await client.list();
@@ -151,6 +155,8 @@
       const toDelete = files.slice().sort((a,b) => a.lastmod - b.lastmod).slice(0, files.length - max);
       for (const f of toDelete) { await client.remove(f.name); }
     }
+    
+    // 备份成功后，本地数据的时间戳已经是正确的，无需更新
   }
 
   async function listSnapshots() {

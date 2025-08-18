@@ -280,6 +280,25 @@ function bindEvents() {
   });
 }
 
+// 更新数据版本显示
+function updateDataVersion(data) {
+  const versionElement = document.getElementById('version-text');
+  if (!versionElement) return;
+  
+  if (data?.lastModified) {
+    const date = new Date(data.lastModified);
+    const formatTime = date.toLocaleString('zh-CN', {
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+    versionElement.textContent = `数据版本: ${formatTime}`;
+  } else {
+    versionElement.textContent = '数据版本: --';
+  }
+}
+
 async function render() {
   const {
     data
@@ -290,6 +309,7 @@ async function render() {
   renderFolderList();
   renderSubfolders();
   renderBookmarkGrid();
+  updateDataVersion(data);
 }
 
 async function renderFolderList() {
