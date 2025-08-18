@@ -74,6 +74,25 @@
         const ok = await testWebDav(message.config);
         return ok ? { ok: true } : { ok: false, error: '连接失败' };
       }
+      if (type === 'cloud:check') {
+        return await checkCloudData();
+      }
+      if (type === 'cloud:sync') {
+        const { settings } = await readAllFromShim();
+        const { syncFromCloud } = await import('./cloud-utils.js');
+        const result = await syncFromCloud(settings, message.fileName);
+        
+        if (result.success) {
+          await writeAllFromShim({ data: result.data });
+          try { await dispatchRuntimeMessage({ type: 'data:changed' }); } catch (e) {}
+          return { ok: true };
+        } else {
+          return { ok: false, error: result.error };
+        }
+      }
+      if (type === 'cloud:manual-check') {
+        return await checkCloudData();
+      }
     } catch (e) {
       return { ok: false, error: String(e && e.message || e) };
     }
@@ -180,6 +199,36 @@
     const client = await getWebDavClient(config);
     await client.ensureBase();
     return true;
+  }
+
+  async function checkCloudData() {
+    try {
+      const { data, settings } = await readAllFromShim();
+      
+      // 使用共享的云端检查工具
+      const { checkCloudData } = await import('./cloud-utils.js');
+      const result = await checkCloudData(settings, data);
+      
+      if (result.hasNewerData) {
+        return {
+          ok: true,
+          result: {
+            hasNewerData: true,
+            cloudFile: result.cloudFile,
+            cloudTime: result.cloudTime,
+            localTime: result.localTime
+          }
+        };
+      } else {
+        return {
+          ok: true,
+          result: { hasNewerData: false }
+        };
+      }
+    } catch (e) {
+      console.warn('检查云端数据失败:', e);
+      return { ok: false, error: String(e.message || e) };
+    }
   }
 
   async function collectFaviconsInPage(pageUrl) {
