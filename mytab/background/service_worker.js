@@ -155,8 +155,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       if (msg?.type === 'webdav:test') {
         const { config } = msg;
         const client = new WebDAVClient(config);
-        await client.ensureBase();
-        sendResponse({ ok: true });
+        const result = await client.testAuthentication();  // 使用新的严格测试
+        if (result.success) {
+          sendResponse({ ok: true, canWrite: result.canWrite });
+        } else {
+          sendResponse({ ok: false, error: result.error });
+        }
         return;
       }
       if (msg?.type === 'cloud:check') {

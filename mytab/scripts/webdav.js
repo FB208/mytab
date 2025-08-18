@@ -66,60 +66,115 @@ export class WebDAVClient {
    * @returns {Promise<boolean>} 服务器是否可访问
    * @throws {Error} 当未配置 WebDAV URL 时抛出错误
    */
-  async ensureBase() {
-    const timer = WebDAVLogger.time('服务器连接检测');
+  /**
+   * 快速且严格的WebDAV验证
+   * 1. 先验证URL格式
+   * 2. 用HEAD请求快速检测服务器可达性
+   * 3. 严格验证认证（401/403检查）
+   * 4. 可选的写入权限测试
+   * @param {boolean} testWrite - 是否测试写入权限
+   * @returns {Promise<Object>} 验证结果 {success: boolean, error?: string, canWrite?: boolean}
+   */
+  async ensureBase(testWrite = false) {
+    const timer = WebDAVLogger.time('WebDAV验证');
     
     try {
-      if (!this.url) throw new Error('未配置 WebDAV URL');
+      if (!this.url) {
+        throw new Error('未配置 WebDAV URL');
+      }
       
-      // 构造 PROPFIND 请求的 XML 体，用于获取目录属性
-      // 使用带 body 的 PROPFIND，提高与各种 WebDAV 实现的兼容性
-      const body = `<?xml version="1.0" encoding="utf-8"?>
-<d:propfind xmlns:d="DAV:">
-  <d:prop>
-    <d:displayname/>
-  </d:prop>
-</d:propfind>`;
-      
-      const propfindTimer = WebDAVLogger.time('PROPFIND 请求');
-      
+      // 1. 验证URL格式
       try {
-        // 发送 PROPFIND 请求检测服务器可用性
-        const res = await davFetch(this.url, { 
-          method: 'PROPFIND', 
-          headers: { 
-            'Accept': '*/*', 
-            'Content-Type': 'application/xml; charset=utf-8', 
-            ...this.authHeader(), 
-            Depth: '1' // 只查询当前目录层级
-          }, 
-          body 
+        new URL(this.url);
+      } catch {
+        throw new Error('URL格式无效');
+      }
+      
+      // 2. 快速HEAD请求检测服务器可达性
+      const headTimer = WebDAVLogger.time('HEAD请求');
+      try {
+        const headRes = await davFetch(this.url, {
+          method: 'HEAD',
+          headers: { ...this.authHeader() }
         });
         
-        propfindTimer({ status: res.status });
+        headTimer({ status: headRes.status });
         
-        if (res.status < 400) {
-          timer({ method: 'PROPFIND', success: true });
-          return true;
+        // 严格检查认证错误
+        if (headRes.status === 401) {
+          throw new Error('认证失败：用户名或密码错误');
+        }
+        if (headRes.status === 403) {
+          throw new Error('权限拒绝：无访问权限');
+        }
+        if (headRes.status >= 400) {
+          throw new Error(`服务器错误：${headRes.status} ${headRes.statusText}`);
         }
         
-        // 若 PROPFIND 不被允许，回退到写入探针文件测试写权限
-        console.log('🔄 PROPFIND 失败，回退到写入测试...');
-        const result = await this.probeWrite();
-        timer({ method: 'probeWrite', success: result });
-        return result;
+      } catch (e) {
+        headTimer(null, e);
+        if (e.message.includes('Failed to fetch') || e.message.includes('NetworkError')) {
+          throw new Error('网络错误：无法连接到服务器');
+        }
+        throw e;
+      }
+      
+      // 3. 验证PROPFIND权限（更严格的WebDAV验证）
+      const propfindTimer = WebDAVLogger.time('PROPFIND验证');
+      try {
+        const propfindRes = await davFetch(this.url, {
+          method: 'PROPFIND',
+          headers: {
+            'Accept': '*/*',
+            'Content-Type': 'application/xml; charset=utf-8',
+            ...this.authHeader(),
+            Depth: '1'
+          }
+        });
+        
+        propfindTimer({ status: propfindRes.status });
+        
+        if (propfindRes.status === 401) {
+          throw new Error('WebDAV认证失败：用户名或密码错误');
+        }
+        if (propfindRes.status === 403) {
+          throw new Error('WebDAV权限拒绝：无目录访问权限');
+        }
+        if (propfindRes.status >= 400 && propfindRes.status !== 405) {
+          // 405 Method Not Allowed 可以接受，表示服务器支持但禁用了PROPFIND
+          throw new Error(`WebDAV错误：${propfindRes.status}`);
+        }
+        
       } catch (e) {
         propfindTimer(null, e);
-        // 网络错误或其他异常时，回退到写入探针文件测试写权限
-        console.log('🔄 PROPFIND 异常，回退到写入测试...');
-        const result = await this.probeWrite();
-        timer({ method: 'probeWrite', success: result });
-        return result;
+        // 如果是405错误，说明服务器可达但可能不支持PROPFIND，继续
+        if (!e.message.includes('405')) {
+          throw e;
+        }
       }
+      
+      // 4. 可选的写入权限测试
+      let canWrite = false;
+      if (testWrite) {
+        canWrite = await this.probeWrite();
+      }
+      
+      timer({ success: true, canWrite });
+      return { success: true, canWrite };
+      
     } catch (e) {
       timer(null, e);
-      throw e;
+      return { success: false, error: e.message };
     }
+  }
+
+  /**
+   * 专门的认证测试方法
+   * 用于options页面的严格测试
+   * @returns {Promise<Object>} 测试结果
+   */
+  async testAuthentication() {
+    return this.ensureBase(true);  // 包含写入权限测试
   }
 
   /**
