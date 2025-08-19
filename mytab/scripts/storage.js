@@ -192,6 +192,43 @@ export async function ensureInit() {
 }
 
 /**
+ * 检测是否为首次使用（没有任何文件夹和书签）
+ * @returns {Promise<boolean>} 如果是首次使用返回true
+ */
+export async function isFirstTimeUser() {
+  const data = await readData();
+  // 检查是否没有文件夹，或者只有空文件夹（没有书签）
+  if (!data.folders || data.folders.length === 0) {
+    return true;
+  }
+  
+  // 检查所有文件夹是否都为空（没有书签）
+  const hasAnyBookmarks = data.folders.some(folder => {
+    if (folder.bookmarks && folder.bookmarks.length > 0) {
+      return true;
+    }
+    // 递归检查子文件夹
+    return hasBookmarksInChildren(folder.children || []);
+  });
+  
+  return !hasAnyBookmarks;
+}
+
+/**
+ * 递归检查子文件夹是否有书签
+ * @param {Array} children - 子文件夹数组
+ * @returns {boolean} 如果有书签返回true
+ */
+function hasBookmarksInChildren(children) {
+  return children.some(child => {
+    if (child.bookmarks && child.bookmarks.length > 0) {
+      return true;
+    }
+    return hasBookmarksInChildren(child.children || []);
+  });
+}
+
+/**
  * ===========================================
  * 树形结构工具函数
  * ===========================================

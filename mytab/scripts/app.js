@@ -19,6 +19,7 @@ import {
   getFolderPath,
   getAllSubfolders,
   DEFAULT_BG_URL,
+  isFirstTimeUser,
   // 兼容性导入（已弃用的API）
   addSubfolder,
   renameSubfolder,
@@ -87,6 +88,17 @@ function checkSyncStatus() {
 async function bootstrap() {
   bindEvents();
   await render();
+  
+  // 检查是否为首次使用，显示操作指引
+  try {
+    const isFirstTime = await isFirstTimeUser();
+    if (isFirstTime) {
+      // 延迟显示引导，确保页面完全加载
+      setTimeout(() => showGuide(), 500);
+    }
+  } catch (e) {
+    console.error('Failed to check first time user:', e);
+  }
 }
 
 function bindEvents() {
@@ -282,6 +294,9 @@ function bindEvents() {
       }
     }, 500);
   });
+  
+  // 绑定首次操作指引的事件
+  bindOnboardingEvents();
 }
 
 // 更新数据版本显示
@@ -1721,6 +1736,339 @@ function showGlobalLoading(message = '正在同步数据...') {
   document.body.style.overflow = 'hidden';
   
   return globalLoading;
+}
+
+// 新版引导系统
+let currentGuideStep = 0;
+const guideSteps = [
+  {
+    target: '#btn-add-folder',
+    title: '创建你的第一个文件夹',
+    content: '点击这个按钮来创建你的第一个文件夹，用于组织管理你的书签。',
+    position: 'right',
+    interactive: true,  // 允许交互
+    autoAdvance: 'modal',  // 等待弹窗关闭后自动前进
+    waitForCondition: true  // 等待条件满足后再继续
+  },
+  {
+    target: '.folder-item',
+    title: '选择文件夹',
+    content: '点击文件夹可以选中它，选中后就可以在文件夹中添加书签了。',
+    position: 'right',
+    interactive: true,
+    autoAdvance: 'click',  // 点击后自动前进
+    condition: async () => {
+      const { data } = await readAll();
+      return data.folders && data.folders.length > 0;
+    },
+    skipIfFalse: false  // 不满足条件时等待而不是跳过
+  },
+  {
+    target: '#btn-add-new-item',
+    title: '添加书签',
+    content: '在文件夹中添加你喜欢的网站书签，方便快速访问。',
+    position: 'right',  // 显示在右侧
+    interactive: true,
+    autoAdvance: 'modal',  // 等待弹窗关闭
+    condition: async () => {
+      // 需要确保有文件夹，并且有文件夹被选中
+      const { data } = await readAll();
+      return data.folders && data.folders.length > 0 && state.selectedFolderId;
+    },
+    skipIfFalse: false  // 不满足条件时等待而不是跳过
+  },
+  {
+    target: '#btn-settings',
+    title: '设置页面',
+    content: '在设置页面可以配置WebDAV同步、导入浏览器书签等高级功能。',
+    position: 'bottom'
+  },
+  {
+    target: '#search',
+    title: '搜索功能',
+    content: '使用搜索框可以快速找到你需要的书签。',
+    position: 'bottom'
+  }
+];
+
+// 显示引导系统
+function showGuide() {
+  const overlay = document.getElementById('guide-overlay');
+  overlay.classList.remove('hidden');
+  currentGuideStep = 0;
+  
+  // 生成步骤指示器
+  const dots = document.getElementById('guide-dots');
+  dots.innerHTML = '';
+  guideSteps.forEach((_, index) => {
+    const dot = document.createElement('div');
+    dot.className = index === 0 ? 'guide-dot active' : 'guide-dot';
+    dots.appendChild(dot);
+  });
+  
+  // 绑定按钮事件
+  document.getElementById('guide-skip').onclick = () => hideGuide();
+  document.getElementById('guide-next').onclick = () => nextGuideStep();
+  
+  // 显示第一步
+  showGuideStep(0);
+}
+
+// 隐藏引导系统
+function hideGuide() {
+  const overlay = document.getElementById('guide-overlay');
+  overlay.classList.add('hidden');
+  
+  // 清理高亮
+  const highlight = document.getElementById('guide-highlight');
+  highlight.style.display = 'none';
+  
+  // 清理交互元素
+  const interactive = document.querySelector('.guide-interactive');
+  if (interactive) {
+    interactive.classList.remove('guide-interactive');
+  }
+  
+  // 清理自动前进监听器
+  if (window.guideAutoAdvanceHandler) {
+    if (typeof window.guideAutoAdvanceHandler === 'function') {
+      window.guideAutoAdvanceHandler();
+    } else {
+      clearInterval(window.guideAutoAdvanceHandler);
+    }
+    window.guideAutoAdvanceHandler = null;
+  }
+}
+
+// 显示指定步骤
+async function showGuideStep(stepIndex) {
+  if (stepIndex >= guideSteps.length) {
+    hideGuide();
+    return;
+  }
+  
+  // 清理上一步的交互元素
+  const prevInteractive = document.querySelector('.guide-interactive');
+  if (prevInteractive) {
+    prevInteractive.classList.remove('guide-interactive');
+  }
+  
+  const step = guideSteps[stepIndex];
+  currentGuideStep = stepIndex;
+  
+  // 检查条件
+  if (step.condition) {
+    const canShow = await step.condition();
+    console.log(`Step ${stepIndex + 1} condition check:`, canShow, 'selectedFolderId:', state.selectedFolderId);
+    if (!canShow) {
+      // 如果skipIfFalse为false，等待条件满足
+      if (step.skipIfFalse === false) {
+        console.log(`Step ${stepIndex + 1} waiting for condition...`);
+        // 等待条件满足后再显示
+        setTimeout(async () => {
+          const canShowNow = await step.condition();
+          console.log(`Step ${stepIndex + 1} retry condition check:`, canShowNow, 'selectedFolderId:', state.selectedFolderId);
+          if (canShowNow) {
+            showGuideStep(stepIndex);
+          } else {
+            // 继续等待
+            setTimeout(() => showGuideStep(stepIndex), 500);
+          }
+        }, 500);
+        return;
+      } else {
+        // 默认行为：跳过此步骤
+        console.log(`Step ${stepIndex + 1} skipping due to condition`);
+        nextGuideStep();
+        return;
+      }
+    }
+  }
+  
+  // 如果启用了自动前进，设置监听
+  if (step.autoAdvance) {
+    setupAutoAdvance(step);
+  }
+  
+  // 更新步骤指示器
+  const dots = document.getElementById('guide-dots').children;
+  Array.from(dots).forEach((dot, index) => {
+    dot.className = index === stepIndex ? 'guide-dot active' : 'guide-dot';
+  });
+  
+  // 更新步骤文本
+  document.getElementById('guide-step-indicator').textContent = `步骤 ${stepIndex + 1} / ${guideSteps.length}`;
+  document.getElementById('guide-title').textContent = step.title;
+  document.getElementById('guide-content').textContent = step.content;
+  
+  // 更新按钮文本
+  const nextBtn = document.getElementById('guide-next');
+  if (stepIndex === guideSteps.length - 1) {
+    nextBtn.textContent = '完成引导';
+  } else {
+    nextBtn.textContent = '下一步';
+  }
+  
+  // 高亮目标元素
+  const target = document.querySelector(step.target);
+  if (target) {
+    highlightElement(target, step.position);
+  } else {
+    // 如果目标不存在，隐藏高亮框
+    const highlight = document.getElementById('guide-highlight');
+    highlight.style.display = 'none';
+    
+    // 居中显示提示框
+    const tooltip = document.getElementById('guide-tooltip');
+    tooltip.style.left = '50%';
+    tooltip.style.top = '50%';
+    tooltip.style.transform = 'translate(-50%, -50%)';
+  }
+}
+
+// 高亮元素并定位提示框
+function highlightElement(element, position = 'bottom') {
+  const rect = element.getBoundingClientRect();
+  const highlight = document.getElementById('guide-highlight');
+  const tooltip = document.getElementById('guide-tooltip');
+  
+  // 设置高亮框位置
+  highlight.style.display = 'block';
+  highlight.style.left = `${rect.left - 4}px`;
+  highlight.style.top = `${rect.top - 4}px`;
+  highlight.style.width = `${rect.width + 8}px`;
+  highlight.style.height = `${rect.height + 8}px`;
+  
+  // 检查当前步骤是否允许交互
+  const step = guideSteps[currentGuideStep];
+  if (step && step.interactive) {
+    // 让目标元素可以交互
+    element.classList.add('guide-interactive');
+    highlight.style.pointerEvents = 'none';  // 高亮框不阻止点击
+  }
+  
+  // 计算提示框位置
+  tooltip.style.transform = 'none';
+  const tooltipWidth = 320;
+  const tooltipHeight = 200; // 估算高度
+  const gap = 16;
+  
+  switch (position) {
+    case 'top':
+      tooltip.style.left = `${rect.left + rect.width / 2 - tooltipWidth / 2}px`;
+      tooltip.style.top = `${rect.top - tooltipHeight - gap}px`;
+      break;
+    case 'bottom':
+      tooltip.style.left = `${rect.left + rect.width / 2 - tooltipWidth / 2}px`;
+      tooltip.style.top = `${rect.bottom + gap}px`;
+      break;
+    case 'left':
+      tooltip.style.left = `${rect.left - tooltipWidth - gap}px`;
+      tooltip.style.top = `${rect.top + rect.height / 2 - tooltipHeight / 2}px`;
+      break;
+    case 'right':
+      tooltip.style.left = `${rect.right + gap}px`;
+      tooltip.style.top = `${rect.top + rect.height / 2 - tooltipHeight / 2}px`;
+      break;
+  }
+  
+  // 确保提示框在视口内
+  const tooltipRect = tooltip.getBoundingClientRect();
+  if (tooltipRect.left < 10) {
+    tooltip.style.left = '10px';
+  }
+  if (tooltipRect.right > window.innerWidth - 10) {
+    tooltip.style.left = `${window.innerWidth - tooltipWidth - 10}px`;
+  }
+  if (tooltipRect.top < 10) {
+    tooltip.style.top = '10px';
+  }
+  if (tooltipRect.bottom > window.innerHeight - 10) {
+    tooltip.style.top = `${window.innerHeight - tooltipHeight - 10}px`;
+  }
+}
+
+// 下一步
+function nextGuideStep() {
+  if (currentGuideStep < guideSteps.length - 1) {
+    showGuideStep(currentGuideStep + 1);
+  } else {
+    hideGuide();
+  }
+}
+
+// 设置自动前进监听
+function setupAutoAdvance(step) {
+  // 清理之前的监听器
+  if (window.guideAutoAdvanceHandler) {
+    if (typeof window.guideAutoAdvanceHandler === 'function') {
+      window.guideAutoAdvanceHandler();
+    } else {
+      clearInterval(window.guideAutoAdvanceHandler);
+    }
+    window.guideAutoAdvanceHandler = null;
+  }
+  
+  if (step.autoAdvance === 'modal') {
+    // 监听弹窗关闭
+    let modalHasOpened = false;
+    window.guideAutoAdvanceHandler = setInterval(() => {
+      const modalVisible = document.querySelector('.modal:not(.hidden)') || document.querySelector('.modal-backdrop:not(.hidden)');
+      
+      if (modalVisible) {
+        modalHasOpened = true;
+      }
+      
+      // 当弹窗已经出现过，并且现在消失了，再前进
+      if (modalHasOpened && !modalVisible) {
+        clearInterval(window.guideAutoAdvanceHandler);
+        window.guideAutoAdvanceHandler = null;
+        
+        // 如果有waitForCondition，等待页面更新后再前进
+        if (step.waitForCondition) {
+          setTimeout(async () => {
+            // 等待render完成
+            await new Promise(resolve => setTimeout(resolve, 300));
+            nextGuideStep();
+          }, 200);
+        } else {
+          // 延迟一下再前进，让用户看到操作结果
+          setTimeout(() => nextGuideStep(), 500);
+        }
+      }
+    }, 200);
+  } else if (step.autoAdvance === 'click') {
+    // 监听目标元素点击
+    const target = document.querySelector(step.target);
+    if (target) {
+      const clickHandler = () => {
+        target.removeEventListener('click', clickHandler);
+        // 延迟前进，让用户看到点击效果
+        setTimeout(() => nextGuideStep(), 300);
+      };
+      target.addEventListener('click', clickHandler);
+      // 保存引用以便清理
+      window.guideAutoAdvanceHandler = () => {
+        target.removeEventListener('click', clickHandler);
+      };
+    }
+  }
+}
+
+// 显示/隐藏首次操作指引（旧版，保留以防其他地方调用）
+function showOnboarding(show = true) {
+  // 新版引导系统不使用旧的HTML结构
+  // 这个函数保留为空，避免报错
+}
+
+// 更新操作指引步骤的状态（旧版，保留以防其他地方调用）
+async function updateOnboardingSteps() {
+  // 新版引导系统不需要这个函数
+}
+
+// 绑定操作指引的事件（旧版，保留以防其他地方调用）
+function bindOnboardingEvents() {
+  // 新版引导系统不需要这个函数
 }
 
 // 隐藏全局loading遮罩

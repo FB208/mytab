@@ -198,9 +198,9 @@ body {
   .folder-item .name, .brand { display:none; }
 }
 
-/* Modal */
-.modal-backdrop { position: fixed; inset: 0; background: rgba(17,24,39,0.35); backdrop-filter: blur(2px); z-index: 30; }
-.modal { position: fixed; inset: 0; display:grid; place-items:center; z-index: 40; }
+/* Modal - 层级高于引导系统，确保弹窗正常显示 */
+.modal-backdrop { position: fixed; inset: 0; background: rgba(17,24,39,0.35); backdrop-filter: blur(2px); z-index: 10000; }
+.modal { position: fixed; inset: 0; display:grid; place-items:center; z-index: 10001; }
 .modal .panel { width: 640px; max-width: calc(100vw - 48px); border-radius: var(--radius-md); box-shadow: var(--shadow-dark), var(--shadow-light); }
 .modal .panel.glass { background: rgba(255,255,255,0.90); border: 1px solid rgba(255,255,255,0.70); backdrop-filter: blur(10px) saturate(140%); -webkit-backdrop-filter: blur(10px) saturate(140%); }
 .modal .inner { padding: 20px; }
@@ -584,6 +584,219 @@ textarea,
 
 .hidden {
   display: none !important;
+}
+
+/* 新版引导系统样式 */
+.guide-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9990;
+  pointer-events: none;
+  transition: all 0.3s ease;
+}
+
+.guide-overlay.hidden {
+  display: none !important;
+}
+
+/* 高亮区域 - 透明窗口效果 */
+.guide-highlight {
+  position: absolute;
+  border: 3px solid var(--primary);
+  border-radius: var(--radius-sm);
+  /* 使用巨大的box-shadow创建半透明遮罩，中间区域保持透明 */
+  box-shadow: 
+    /* 内层发光效果 */
+    0 0 0 2px rgba(78, 168, 222, 0.4),
+    0 0 20px rgba(78, 168, 222, 0.3),
+    /* 外层遮罩 */
+    0 0 0 100000px rgba(0, 0, 0, 0.4);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: pulseHighlight 2s infinite;
+  pointer-events: none;
+  z-index: 9991;
+}
+
+@keyframes pulseHighlight {
+  0%, 100% {
+    box-shadow: 
+      0 0 0 2px rgba(78, 168, 222, 0.4),
+      0 0 20px rgba(78, 168, 222, 0.3),
+      0 0 0 100000px rgba(0, 0, 0, 0.4);
+  }
+  50% {
+    box-shadow: 
+      0 0 0 4px rgba(78, 168, 222, 0.5),
+      0 0 30px rgba(78, 168, 222, 0.4),
+      0 0 0 100000px rgba(0, 0, 0, 0.4);
+  }
+}
+
+/* 提示气泡 */
+.guide-tooltip {
+  position: absolute;
+  background: white;
+  border-radius: var(--radius-md);
+  padding: 20px;
+  min-width: 320px;
+  max-width: 400px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  z-index: 9995;
+  pointer-events: auto;
+  animation: slideIn 0.4s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.guide-tooltip::before {
+  content: '';
+  position: absolute;
+  width: 0;
+  height: 0;
+  border: 10px solid transparent;
+}
+
+/* 箭头方向 */
+.guide-tooltip.top::before {
+  bottom: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-top-color: white;
+}
+
+.guide-tooltip.bottom::before {
+  top: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-bottom-color: white;
+}
+
+.guide-tooltip.left::before {
+  right: -20px;
+  top: 50%;
+  transform: translateY(-50%);
+  border-left-color: white;
+}
+
+.guide-tooltip.right::before {
+  left: -20px;
+  top: 50%;
+  transform: translateY(-50%);
+  border-right-color: white;
+}
+
+.guide-tooltip-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.guide-tooltip-step {
+  font-size: 12px;
+  color: var(--text-dim);
+  background: rgba(78, 168, 222, 0.1);
+  padding: 4px 8px;
+  border-radius: 12px;
+}
+
+.guide-tooltip-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.guide-tooltip-content {
+  font-size: 14px;
+  color: var(--text-dim);
+  line-height: 1.6;
+  margin-bottom: 16px;
+}
+
+.guide-tooltip-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.guide-btn {
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+}
+
+.guide-btn-skip {
+  background: transparent;
+  color: var(--text-dim);
+}
+
+.guide-btn-skip:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.guide-btn-next {
+  background: var(--primary);
+  color: white;
+}
+
+.guide-btn-next:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(78, 168, 222, 0.4);
+}
+
+/* 步骤指示器 */
+.guide-dots {
+  position: fixed;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  z-index: 9996;
+  padding: 12px 20px;
+  background: white;
+  border-radius: 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.guide-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #d1d5db;
+  transition: all 0.3s;
+  cursor: pointer;
+}
+
+.guide-dot.active {
+  width: 24px;
+  border-radius: 4px;
+  background: var(--primary);
+}
+
+.guide-dot.completed {
+  background: #10b981;
+}
+
+/* 高亮元素允许交互 */
+.guide-interactive {
+  position: relative;
+  z-index: 9991;
+  pointer-events: auto;
 }
 
 /* 数据版本显示 */

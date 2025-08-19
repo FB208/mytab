@@ -217,6 +217,26 @@
     </div>
   </div>
 
+  <!-- 新版引导系统 -->
+  <div id="guide-overlay" class="guide-overlay hidden">
+    <!-- 高亮框 -->
+    <div class="guide-highlight" id="guide-highlight"></div>
+    <!-- 提示气泡 -->
+    <div class="guide-tooltip" id="guide-tooltip">
+      <div class="guide-tooltip-header">
+        <span class="guide-tooltip-step" id="guide-step-indicator"></span>
+      </div>
+      <h3 class="guide-tooltip-title" id="guide-title"></h3>
+      <p class="guide-tooltip-content" id="guide-content"></p>
+      <div class="guide-tooltip-actions">
+        <button class="guide-btn guide-btn-skip" id="guide-skip">跳过引导</button>
+        <button class="guide-btn guide-btn-next" id="guide-next">下一步</button>
+      </div>
+    </div>
+    <!-- 步骤指示器 -->
+    <div class="guide-dots" id="guide-dots"></div>
+  </div>
+
   <!-- 数据版本显示 -->
   <div id="data-version" class="data-version">
     <span id="version-text">数据版本: --</span>
