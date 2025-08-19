@@ -124,8 +124,63 @@ body {
 .tools-floating { position: absolute; top: 10px; right: 16px; display:flex; align-items:center; gap: 10px; background: transparent; box-shadow: none; }
 .tools-floating .search { min-width: 240px; height: var(--ctl-sm-height); line-height: var(--ctl-sm-height); border-radius: 10px; padding: 0 12px; font-size: 16px; box-shadow: var(--shadow-dark-sm), var(--shadow-light-sm); background: rgba(255,255,255,0.6); border: 1px solid rgba(255,255,255,0.35); }
 
-/* 二级文件夹改为与书签同格布局，原样式移除 */
-.subfolders { display:none; }
+/* 子文件夹横向列表样式 */
+.subfolders { 
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 0 16px;
+  margin-bottom: 16px;
+}
+
+.subfolder-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  min-width: 180px;
+  background: rgba(255,255,255,0.55);
+  border: 1px solid rgba(255,255,255,0.35);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-dark-sm), var(--shadow-light-sm);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.subfolder-item:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-dark-lg), var(--shadow-light-lg);
+}
+
+.subfolder-item .left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.subfolder-item .icon {
+  font-size: 20px;
+}
+
+.subfolder-item .name {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.subfolder-item .right {
+  display: flex;
+  gap: 6px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.subfolder-item:hover .right {
+  opacity: 1;
+}
 
 .bookmark-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 22px; }
 .bookmark-card { padding: 12px; display:flex; flex-direction: column; align-items:center; gap: 10px; cursor: pointer; transition: transform .15s ease; background: transparent; border-radius: var(--radius-md); box-shadow: none; }
@@ -196,6 +251,140 @@ body {
 
 #backup-list li { padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; } .backup-item-footer { display: flex; align-items: center; gap: 16px; } .backup-date { opacity: 0.7; }
 
+
+/* 拖拽排序视觉反馈 */
+.drag-over-top::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--primary), rgba(78,168,222,0.5));
+  border-radius: 2px;
+  z-index: 10;
+}
+
+.drag-over-bottom::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--primary), rgba(78,168,222,0.5));
+  border-radius: 2px;
+  z-index: 10;
+}
+
+.drag-over-center {
+  background: rgba(78,168,222,0.15) !important;
+  border: 2px dashed var(--primary) !important;
+  transform: scale(1.02);
+}
+
+/* 横向拖拽区域视觉反馈（用于子文件夹） */
+.drag-over-left {
+  position: relative;
+}
+.drag-over-left::before {
+  content: '';
+  position: absolute;
+  top: 10%;
+  left: -3px;
+  bottom: 10%;
+  width: 3px;
+  background: linear-gradient(180deg, var(--primary), rgba(78,168,222,0.8));
+  border-radius: 2px;
+  box-shadow: 2px 0 8px rgba(78,168,222,0.4);
+  animation: smoothSlideVertical 0.3s ease-out;
+  z-index: 10;
+}
+
+.drag-over-right {
+  position: relative;
+}
+.drag-over-right::after {
+  content: '';
+  position: absolute;
+  top: 10%;
+  right: -3px;
+  bottom: 10%;
+  width: 3px;
+  background: linear-gradient(180deg, var(--primary), rgba(78,168,222,0.8));
+  border-radius: 2px;
+  box-shadow: -2px 0 8px rgba(78,168,222,0.4);
+  animation: smoothSlideVertical 0.3s ease-out;
+  z-index: 10;
+}
+.drag-over-top {
+  position: relative;
+}
+.drag-over-top::before {
+  content: '';
+  position: absolute;
+  top: -3px;
+  left: 10%;
+  right: 10%;
+  height: 3px;
+  background: linear-gradient(90deg, var(--primary), rgba(78,168,222,0.8));
+  border-radius: 2px;
+  box-shadow: 0 2px 8px rgba(78,168,222,0.4);
+  animation: smoothSlide 0.3s ease-out;
+}
+
+.drag-over-bottom {
+  position: relative;
+}
+.drag-over-bottom::after {
+  content: '';
+  position: absolute;
+  bottom: -3px;
+  left: 10%;
+  right: 10%;
+  height: 3px;
+  background: linear-gradient(90deg, var(--primary), rgba(78,168,222,0.8));
+  border-radius: 2px;
+  box-shadow: 0 2px 8px rgba(78,168,222,0.4);
+  animation: smoothSlide 0.3s ease-out;
+}
+
+.drag-over-center {
+  background: rgba(78,168,222,0.12) !important;
+  border: 2px dashed var(--primary) !important;
+  /* 移除外发光效果 */
+  transform: scale(1.01) !important;
+  transition: all 0.2s ease !important;
+}
+
+@keyframes smoothSlide {
+  0% { 
+    opacity: 0; 
+    transform: scaleX(0.3) translateY(-2px); 
+  }
+  100% { 
+    opacity: 1; 
+    transform: scaleX(1) translateY(0); 
+  }
+}
+
+@keyframes smoothSlideVertical {
+  0% { 
+    opacity: 0; 
+    transform: scaleY(0.3) translateX(-2px); 
+  }
+  100% { 
+    opacity: 1; 
+    transform: scaleY(1) translateX(0); 
+  }
+}
+
+/* 拖拽中的元素样式 */
+[draggable="true"]:active {
+  opacity: 0.7;
+  transform: rotate(2deg);
+  cursor: grabbing;
+}
 
 /* 通用小弹窗 */
 .tm-message { margin-bottom: 8px; color: var(--text-dim); }

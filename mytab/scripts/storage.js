@@ -650,6 +650,75 @@ export async function reorderBookmarksRelative({
 }
 
 /**
+ * 一级文件夹拖拽排序：将sourceId文件夹拖到targetId文件夹之前
+ * @param {Object} params - 参数对象
+ * @param {string} params.sourceId - 要移动的文件夹ID
+ * @param {string} params.targetId - 目标位置文件夹ID
+ */
+export async function reorderFolders({
+  sourceId,
+  targetId
+}) {
+  const data = await readData();
+  
+  // 获取根级文件夹（不包含parentId的文件夹）
+  const rootFolders = data.folders.filter(f => !f.parentId);
+  const sourceIndex = rootFolders.findIndex(f => f.id === sourceId);
+  const targetIndex = rootFolders.findIndex(f => f.id === targetId);
+  
+  if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return false; // 无效的移动操作
+  
+  // 在data.folders中定位实际位置
+  const sourceDataIndex = data.folders.findIndex(f => f.id === sourceId);
+  const targetDataIndex = data.folders.findIndex(f => f.id === targetId);
+  
+  if (sourceDataIndex < 0 || targetDataIndex < 0) return false;
+  
+  // 执行数组元素移动
+  const [folder] = data.folders.splice(sourceDataIndex, 1); // 移除源位置的元素
+  const insertIndex = sourceDataIndex < targetDataIndex ? targetDataIndex - 1 : targetDataIndex; // 计算插入位置
+  data.folders.splice(insertIndex, 0, folder); // 插入到新位置
+  
+  data.lastModified = Date.now();
+  await writeData(data);
+  notifyChanged();
+  return true;
+}
+
+/**
+ * 子文件夹拖拽排序：将sourceId子文件夹拖到targetId子文件夹之前
+ * @param {Object} params - 参数对象
+ * @param {string} params.parentId - 父文件夹ID
+ * @param {string} params.sourceId - 要移动的子文件夹ID
+ * @param {string} params.targetId - 目标位置子文件夹ID
+ */
+export async function reorderSubfolders({
+  parentId,
+  sourceId,
+  targetId
+}) {
+  const data = await readData();
+  const parentFolder = findFolderById(data.folders, parentId);
+  if (!parentFolder || !parentFolder.children) return false; // 父文件夹不存在或没有子文件夹
+  
+  const children = parentFolder.children;
+  const sourceIndex = children.findIndex(f => f.id === sourceId);
+  const targetIndex = children.findIndex(f => f.id === targetId);
+  
+  if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return false; // 无效的移动操作
+  
+  // 执行数组元素移动
+  const [subfolder] = children.splice(sourceIndex, 1); // 移除源位置的元素
+  const insertIndex = sourceIndex < targetIndex ? targetIndex - 1 : targetIndex; // 计算插入位置
+  children.splice(insertIndex, 0, subfolder); // 插入到新位置
+  
+  data.lastModified = Date.now();
+  await writeData(data);
+  notifyChanged();
+  return true;
+}
+
+/**
  * ===========================================
  * 工具函数
  * ===========================================
