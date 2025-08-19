@@ -8,7 +8,7 @@
  * 4. 消息路由：处理来自popup和options页面的请求
  */
 
-import { DEFAULT_SETTINGS, readAll, writeSettings } from '../scripts/storage.js';
+import { DEFAULT_SETTINGS, readAll, writeSettings, isDataEmpty } from '../scripts/storage.js';
 import { WebDAVClient } from '../scripts/webdav.js';
 import { collectFavicons } from '../scripts/favicon-utils.js';
 import { 
@@ -42,10 +42,16 @@ chrome.storage.onChanged.addListener(async (changes, area) => {
     await ensureAlarm();
   }
   
-  // 数据变化：触发防抖备份（4秒后执行）
+  // 数据变化：检查是否为空数据，非空数据才触发防抖备份
   if (area === 'local' && changes.data) {
-    // 标记为auto来源，表示由用户操作触发
-    scheduleBackup('auto');
+    const newData = changes.data.newValue;
+    // 检查数据是否为空，空数据不触发自动备份
+    if (!isDataEmpty(newData)) {
+      // 标记为 auto来源，表示由用户操作触发
+      scheduleBackup('auto');
+    } else {
+      console.log('检测到空数据变化，跳过自动备份');
+    }
   }
 });
 
@@ -149,12 +155,13 @@ async function doBackup(source = 'manual') {
     // 获取最新的本地数据和设置
     const { data, settings } = await readAll();
     
-    // 使用共享模块的备份函数
+    // 使用共享模块的备份函数，传入空数据检测函数
     await doBackupToCloud({
       data,
       settings,
       source,
-      createClient: (config) => new WebDAVClient(config)
+      createClient: (config) => new WebDAVClient(config),
+      isDataEmpty
     });
     
     // 同步备份不显示通知，避免干扰用户

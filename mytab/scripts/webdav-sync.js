@@ -307,12 +307,20 @@ export async function syncFromCloudData({
  * @param {Object} params.settings - 设置信息
  * @param {string} params.source - 备份来源类型
  * @param {Function} params.createClient - 创建WebDAV客户端的函数
+ * @param {Function} [params.isDataEmpty] - 检查数据是否为空的函数
  * @returns {Promise<void>}
  */
-export async function doBackupToCloud({ data, settings, source, createClient }) {
+export async function doBackupToCloud({ data, settings, source, createClient, isDataEmpty }) {
   try {
     // 检查WebDAV配置
     if (!settings?.webdav?.url) return;
+    
+    // 检查数据是否为空，避免空数据覆盖云端数据
+    // sync_backup 类型的备份不进行此检查，因为同步前需要备份当前状态
+    if (source !== 'sync_backup' && isDataEmpty && isDataEmpty(data)) {
+      console.log('检测到空数据，跳过自动备份以避免覆盖云端数据');
+      return;
+    }
     
     // 创建WebDAV客户端
     const client = await createClient(settings.webdav);

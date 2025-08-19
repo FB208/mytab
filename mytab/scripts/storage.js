@@ -10,7 +10,7 @@ export const DEFAULT_BG_URL = 'https://qiniu.markup.com.cn/20250814195424790.jpg
 export const DEFAULT_DATA = {
   folders: [], // 文件夹列表，每个文件夹包含书签和子文件夹
   backgroundImage: '', // 背景图片URL（空表示使用系统默认）
-  lastModified: Date.now() // 最后修改时间戳
+  lastModified: new Date('2020-01-01').getTime() // 较早的时间戳，确保云端数据优先
 };
 
 // 默认设置结构
@@ -654,6 +654,40 @@ function hashCode(str) {
     h = Math.imul(31, h) + str.charCodeAt(i) | 0;
   }
   return h;
+}
+
+/**
+ * 判断数据是否为空
+ * 用于避免空数据被错误备份
+ * @param {Object} data - 要检查的数据对象
+ * @returns {boolean} 如果数据为空则返回true
+ */
+export function isDataEmpty(data) {
+  if (!data || typeof data !== 'object') return true;
+  
+  // 检查是否有文件夹
+  if (!Array.isArray(data.folders) || data.folders.length === 0) {
+    return true;
+  }
+  
+  // 检查是否所有文件夹都是空的（没有书签也没有子文件夹）
+  const hasContent = data.folders.some(folder => {
+    // 检查文件夹是否有书签
+    if (Array.isArray(folder.bookmarks) && folder.bookmarks.length > 0) {
+      return true;
+    }
+    
+    // 检查文件夹是否有非空的子文件夹
+    if (Array.isArray(folder.subfolders)) {
+      return folder.subfolders.some(subfolder => {
+        return Array.isArray(subfolder.bookmarks) && subfolder.bookmarks.length > 0;
+      });
+    }
+    
+    return false;
+  });
+  
+  return !hasContent;
 }
 
 /**
