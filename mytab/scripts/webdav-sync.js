@@ -9,36 +9,82 @@
  */
 
 /**
- * 从备份文件名中提取时间戳
- * 支持两种文件名格式，确保向后兼容性
+ * 将毫秒时间戳转换为用户友好的格式 yyMMdd_HHmmss_sss
  * 
- * 文件名格式：
- * 1. 新格式：prefix_1755515788864.json（直接使用13位时间戳数字）
- * 2. 旧格式：prefix_2025-08-18T11-11-46-555Z.json（ISO日期时间格式）
+ * @param {number} timestamp - 毫秒时间戳
+ * @returns {string} 格式化的时间字符串，例如：250819_014432_864
+ */
+export function formatTimestampToFriendlyFormat(timestamp) {
+  const date = new Date(timestamp);
+  
+  const year = String(date.getFullYear()).slice(-2); // 取年份后两位
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hour = String(date.getHours()).padStart(2, '0');
+  const minute = String(date.getMinutes()).padStart(2, '0');
+  const second = String(date.getSeconds()).padStart(2, '0');
+  const millisecond = String(date.getMilliseconds()).padStart(3, '0');
+  
+  return `${year}${month}${day}_${hour}${minute}${second}_${millisecond}`;
+}
+
+/**
+ * 将用户友好格式 yyMMdd_HHmmss_sss 转换回毫秒时间戳
+ * 
+ * @param {string} timeStr - 格式化的时间字符串，例如：250819_014432_864
+ * @returns {number|null} 毫秒时间戳，解析失败返回null
+ */
+export function parseFriendlyFormatToTimestamp(timeStr) {
+  try {
+    // 匹配格式 yyMMdd_HHmmss_sss
+    const match = timeStr.match(/^(\d{2})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})_(\d{3})$/);
+    if (!match) return null;
+    
+    const [, yy, mm, dd, HH, MM, SS, sss] = match;
+    
+    // 处理年份：20xx 或 21xx
+    const currentYear = new Date().getFullYear();
+    const currentCentury = Math.floor(currentYear / 100) * 100;
+    const year = currentCentury + parseInt(yy, 10);
+    
+    // 如果计算出的年份比当前年份大很多，可能是上个世纪
+    const finalYear = year > currentYear + 10 ? year - 100 : year;
+    
+    const date = new Date(
+      finalYear,
+      parseInt(mm, 10) - 1, // 月份从0开始
+      parseInt(dd, 10),
+      parseInt(HH, 10),
+      parseInt(MM, 10),
+      parseInt(SS, 10),
+      parseInt(sss, 10)
+    );
+    
+    return date.getTime();
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
+ * 从备份文件名中提取时间戳
+ * 只支持新的用户友好格式 yyMMdd_HHmmss_sss
+ * 
+ * 文件名格式：prefix_250819_014432_864.json
  * 
  * @param {string} fileName - 备份文件名
  * @returns {number|null} 提取的时间戳（毫秒），失败返回null
  */
 export function extractTimestampFromFileName(fileName) {
   try {
-    // 新格式：直接匹配13位数字时间戳
-    const newFormatMatch = fileName.match(/(\d{13})\.json$/);
-    if (newFormatMatch) {
-      const timestamp = parseInt(newFormatMatch[1], 10);
-      return isNaN(timestamp) ? null : timestamp;
+    // 匹配新的友好格式：yyMMdd_HHmmss_sss
+    const match = fileName.match(/_([0-9]{6}_[0-9]{6}_[0-9]{3})\.json$/);
+    if (match) {
+      const timeStr = match[1];
+      return parseFriendlyFormatToTimestamp(timeStr);
     }
     
-    // 旧格式：解析ISO日期时间格式
-    const oldFormatMatch = fileName.match(/(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z)\.json$/);
-    if (oldFormatMatch) {
-      const timeStr = oldFormatMatch[1];
-      // 将文件名中的时间格式转换为标准ISO格式
-      const isoString = timeStr.replace(/T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z/, 'T$1:$2:$3.$4Z');
-      const timestamp = new Date(isoString).getTime();
-      return isNaN(timestamp) ? null : timestamp;
-    }
-    
-    console.warn('无法识别的文件名格式:', fileName);
+    console.warn('无法识别的文件名格式:', fileName, '，期望格式：prefix_yyMMdd_HHmmss_sss.json');
     return null;
   } catch (e) {
     console.warn('解析文件名时间戳失败:', fileName, e);
@@ -336,7 +382,8 @@ export async function doBackupToCloud({ data, settings, source, createClient, is
     
     // 使用数据最后修改时间作为文件名时间戳，确保准确性
     const dataTimestamp = data?.lastModified || Date.now();
-    const name = `${prefix}_${dataTimestamp}.json`;
+    const formattedTime = formatTimestampToFriendlyFormat(dataTimestamp);
+    const name = `${prefix}_${formattedTime}.json`;
     
     // 数据清理：避免缓存污染和减少文件大小
     // 深拷贝数据，防止修改原始数据
