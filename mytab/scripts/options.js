@@ -57,8 +57,9 @@ async function init() {
   els.max.value = settings.backup?.maxSnapshots ?? 100;
   
   // 填充背景图片配置
-  els.bgUrl.value = data.backgroundImage || '';
-  els.bgUrl.placeholder = "请输入背景图片Url";
+  // 只有当用户真正设置了背景图片时才显示，否则显示为空（不显示系统默认URL）
+  els.bgUrl.value = (data.backgroundImage && data.backgroundImage.trim()) || '';
+  els.bgUrl.placeholder = "请输入背景图片Url（留空则使用默认背景）";
 
   // 绑定事件监听器
   bind();

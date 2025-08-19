@@ -303,7 +303,8 @@ async function render() {
     data
   } = await readAll();
   const bg = document.getElementById('bg');
-  const url = data.backgroundImage && data.backgroundImage.trim() ? data.backgroundImage : DEFAULT_BG_URL;
+  // 只有用户设置了背景图片时才使用，否则使用系统默认
+  const url = (data.backgroundImage && data.backgroundImage.trim()) || DEFAULT_BG_URL;
   bg.style.backgroundImage = `url(${url})`;
   renderFolderList();
   renderSubfolders();

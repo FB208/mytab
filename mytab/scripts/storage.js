@@ -9,7 +9,7 @@ export const DEFAULT_BG_URL = 'https://qiniu.markup.com.cn/20250814195424790.jpg
 // 默认数据结构
 export const DEFAULT_DATA = {
   folders: [], // 文件夹列表，每个文件夹包含书签和子文件夹
-  backgroundImage: DEFAULT_BG_URL, // 背景图片URL
+  backgroundImage: '', // 背景图片URL（空表示使用系统默认）
   lastModified: Date.now() // 最后修改时间戳
 };
 
