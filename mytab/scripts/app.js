@@ -327,26 +327,13 @@ async function renderFolderList() {
   list.innerHTML = '';
   const tpl = document.getElementById('tpl-folder-item');
 
-  // 获取当前层级的文件夹列表
-  let currentFolders = [];
-  if (!state.selectedFolderId) {
-    // 显示根级别文件夹
-    currentFolders = data.folders.filter(f => !f.parentId);
-    if (currentFolders[0]) {
-      state.selectedFolderId = currentFolders[0].id;
-      updateCurrentPath(data);
-    }
-  } else {
-    // 显示当前选中文件夹的父级别和兄弟文件夹
-    const currentFolder = findFolderById(data.folders, state.selectedFolderId);
-    if (currentFolder) {
-      if (currentFolder.parentId) {
-        const parentFolder = findFolderById(data.folders, currentFolder.parentId);
-        currentFolders = parentFolder ? parentFolder.children || [] : [];
-      } else {
-        currentFolders = data.folders.filter(f => !f.parentId);
-      }
-    }
+  // 始终显示根级别（一级）文件夹
+  const currentFolders = data.folders.filter(f => !f.parentId);
+  
+  // 如果没有选中的文件夹，默认选中第一个
+  if (!state.selectedFolderId && currentFolders[0]) {
+    state.selectedFolderId = currentFolders[0].id;
+    updateCurrentPath(data);
   }
 
   currentFolders.forEach(folder => {
@@ -354,7 +341,10 @@ async function renderFolderList() {
     el.dataset.id = folder.id;
     el.querySelector('.icon').textContent = folder.icon || '📁';
     el.querySelector('.name').textContent = folder.name;
-    if (folder.id === state.selectedFolderId) el.classList.add('active');
+    
+    // 检查当前选中的文件夹是否是这个文件夹或其子文件夹
+    const isActive = checkIfAncestor(data.folders, state.selectedFolderId, folder.id);
+    if (isActive) el.classList.add('active');
     
     // 作为拖拽目标：允许放置书签和文件夹
     el.addEventListener('dragover', (ev) => {
@@ -434,6 +424,22 @@ async function renderFolderList() {
     });
     list.appendChild(el);
   });
+}
+
+// 检查一个文件夹是否是另一个文件夹或其祖先
+function checkIfAncestor(folders, childId, ancestorId) {
+  if (!childId) return false;
+  if (childId === ancestorId) return true;
+  
+  const child = findFolderById(folders, childId);
+  if (!child) return false;
+  
+  // 如果有父文件夹，递归检查
+  if (child.parentId) {
+    return checkIfAncestor(folders, child.parentId, ancestorId);
+  }
+  
+  return false;
 }
 
 // 更新当前路径（面包屑导航）
