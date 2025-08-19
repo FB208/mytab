@@ -1,14 +1,15 @@
 /**
  * 数据与存储层
  * 负责管理Chrome扩展的本地存储，包括书签数据和设置信息
+ * 重构为支持无限层级文件夹的树形结构
  */
 
 // 默认背景图片URL
 export const DEFAULT_BG_URL = 'https://qiniu.markup.com.cn/20250814195424790.jpg';
 
-// 默认数据结构
+// 默认数据结构 - 重构为树形结构
 export const DEFAULT_DATA = {
-  folders: [], // 文件夹列表，每个文件夹包含书签和子文件夹
+  folders: [], // 文件夹列表，支持无限层级嵌套
   backgroundImage: '', // 背景图片URL（空表示使用系统默认）
   lastModified: new Date('2020-01-01').getTime() // 较早的时间戳，确保云端数据优先
 };
@@ -108,8 +109,6 @@ export async function writeSettings(settings) {
   });
 }
 
-// 注意：history 功能已移除，精简存储结构
-
 /**
  * 生成唯一ID
  * @param {string} prefix - ID前缀，默认为'id'
@@ -130,21 +129,142 @@ export function deepClone(obj) {
 
 /**
  * 确保存储初始化
- * 检查并初始化默认的数据和设置结构
+ * 检查并初始化默认的数据和设置结构，同时迁移旧数据格式
  */
 export async function ensureInit() {
   const {
     data,
     settings
   } = await readAll();
+  
   // 如果设置不存在或缺少backup字段，则初始化默认设置
   if (!settings || !('backup' in settings)) {
     await writeSettings(DEFAULT_SETTINGS);
   }
+  
   // 如果数据不存在或缺少folders字段，则初始化默认数据
   if (!data || !('folders' in data)) {
     await writeData(DEFAULT_DATA);
+    return;
   }
+  
+  // 数据迁移：将旧的二级结构转换为新的无限层级结构
+  let needsMigration = false;
+  const migratedData = deepClone(data);
+  
+  if (Array.isArray(migratedData.folders)) {
+    migratedData.folders.forEach(folder => {
+      // 检查是否有旧的subfolders字段需要迁移
+      if (folder.subfolders && !folder.children) {
+        needsMigration = true;
+        folder.children = folder.subfolders.map(subfolder => ({
+          ...subfolder,
+          type: 'folder',
+          parentId: folder.id,
+          icon: '📁',
+          children: [] // 子文件夹初始化为无子级
+        }));
+        // 保留subfolders字段以保持向后兼容性，但新逻辑使用children
+      }
+      
+      // 确保文件夹有必要的新字段
+      if (!folder.type) {
+        folder.type = 'folder';
+        needsMigration = true;
+      }
+      if (!folder.parentId) {
+        folder.parentId = null; // 根级文件夹
+        needsMigration = true;
+      }
+      if (!folder.children) {
+        folder.children = [];
+        needsMigration = true;
+      }
+    });
+  }
+  
+  // 如果需要迁移，保存迁移后的数据
+  if (needsMigration) {
+    migratedData.lastModified = Date.now();
+    await writeData(migratedData);
+    console.log('数据已成功迁移到新的无限层级结构');
+  }
+}
+
+/**
+ * ===========================================
+ * 树形结构工具函数
+ * ===========================================
+ */
+
+/**
+ * 在文件夹树中查找指定ID的文件夹
+ * @param {Array} folders - 文件夹数组
+ * @param {string} folderId - 要查找的文件夹ID
+ * @returns {Object|null} 找到的文件夹对象，如果不存在则返回null
+ */
+export function findFolderById(folders, folderId) {
+  for (const folder of folders) {
+    if (folder.id === folderId) {
+      return folder;
+    }
+    if (folder.children && folder.children.length > 0) {
+      const found = findFolderById(folder.children, folderId);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+/**
+ * 获取文件夹的完整路径
+ * @param {Array} folders - 文件夹数组
+ * @param {string} folderId - 文件夹ID
+ * @returns {Array} 从根到目标文件夹的路径数组
+ */
+export function getFolderPath(folders, folderId) {
+  function findPath(folders, targetId, currentPath = []) {
+    for (const folder of folders) {
+      const newPath = [...currentPath, folder];
+      if (folder.id === targetId) {
+        return newPath;
+      }
+      if (folder.children && folder.children.length > 0) {
+        const found = findPath(folder.children, targetId, newPath);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+  return findPath(folders, folderId) || [];
+}
+
+/**
+ * 获取文件夹的所有子文件夹（平铺列表）
+ * @param {Object} folder - 文件夹对象
+ * @returns {Array} 所有子文件夹的平铺数组
+ */
+export function getAllSubfolders(folder) {
+  if (!folder || !folder.children) return [];
+  
+  let result = [];
+  for (const child of folder.children) {
+    result.push(child);
+    result = result.concat(getAllSubfolders(child));
+  }
+  return result;
+}
+
+/**
+ * 检查文件夹A是否是文件夹B的祖先
+ * @param {Array} folders - 文件夹数组
+ * @param {string} ancestorId - 可能的祖先文件夹ID
+ * @param {string} descendantId - 可能的后代文件夹ID
+ * @returns {boolean} 如果ancestorId是descendantId的祖先则返回true
+ */
+export function isAncestor(folders, ancestorId, descendantId) {
+  const descendantPath = getFolderPath(folders, descendantId);
+  return descendantPath.some(folder => folder.id === ancestorId);
 }
 
 /**
@@ -156,18 +276,32 @@ export async function ensureInit() {
 /**
  * 添加新文件夹
  * @param {string} name - 文件夹名称，默认为'新文件夹'
+ * @param {string} parentId - 父文件夹ID，为null时添加到根级别
  * @returns {Promise<Object>} 创建的文件夹对象
  */
-export async function addFolder(name) {
+export async function addFolder(name, parentId = null) {
   const data = await readData();
   const folder = {
     id: generateId('f'), // 生成文件夹ID，前缀为'f'
     name: name || '新文件夹', // 文件夹名称
     icon: '📁', // 文件夹图标
+    type: 'folder', // 类型标识
+    parentId: parentId, // 父文件夹ID
     bookmarks: [], // 书签列表
-    subfolders: [] // 子文件夹列表
+    children: [] // 子文件夹列表
   };
-  data.folders.push(folder);
+
+  if (parentId) {
+    // 添加到指定父文件夹
+    const parentFolder = findFolderById(data.folders, parentId);
+    if (!parentFolder) return null; // 父文件夹不存在
+    parentFolder.children = parentFolder.children || [];
+    parentFolder.children.push(folder);
+  } else {
+    // 添加到根级别
+    data.folders.push(folder);
+  }
+
   data.lastModified = Date.now(); // 更新修改时间
   await writeData(data);
   notifyChanged(); // 通知数据变更
@@ -181,7 +315,7 @@ export async function addFolder(name) {
  */
 export async function renameFolder(folderId, newName) {
   const data = await readData();
-  const folder = data.folders.find(f => f.id === folderId);
+  const folder = findFolderById(data.folders, folderId);
   if (!folder) return; // 文件夹不存在则返回
 
   folder.name = newName;
@@ -196,9 +330,21 @@ export async function renameFolder(folderId, newName) {
  */
 export async function deleteFolder(folderId) {
   const data = await readData();
-  const idx = data.folders.findIndex(f => f.id === folderId);
-  if (idx >= 0) {
-    data.folders.splice(idx, 1); // 从数组中移除文件夹
+  
+  function removeFromArray(folders) {
+    for (let i = 0; i < folders.length; i++) {
+      if (folders[i].id === folderId) {
+        folders.splice(i, 1);
+        return true;
+      }
+      if (folders[i].children && removeFromArray(folders[i].children)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  if (removeFromArray(data.folders)) {
     data.lastModified = Date.now();
     await writeData(data);
     notifyChanged();
@@ -206,70 +352,56 @@ export async function deleteFolder(folderId) {
 }
 
 /**
- * ===========================================
- * 业务操作：子文件夹管理
- * ===========================================
+ * 移动文件夹到新的父文件夹
+ * @param {string} folderId - 要移动的文件夹ID
+ * @param {string} newParentId - 新的父文件夹ID，null表示移动到根级别
+ * @returns {Promise<boolean>} 移动是否成功
  */
-
-/**
- * 添加子文件夹
- * @param {string} folderId - 父文件夹ID
- * @param {string} name - 子文件夹名称，默认为'新建二级'
- * @returns {Promise<Object|null>} 创建的子文件夹对象，如果父文件夹不存在则返回null
- */
-export async function addSubfolder(folderId, name) {
+export async function moveFolder(folderId, newParentId) {
   const data = await readData();
-  const folder = data.folders.find(f => f.id === folderId);
-  if (!folder) return null; // 父文件夹不存在
-
-  folder.subfolders = folder.subfolders || [];
-  const sub = {
-    id: generateId('sf'), // 生成子文件夹ID，前缀为'sf'
-    name: name || '新建二级', // 子文件夹名称
-    bookmarks: [] // 子文件夹内的书签列表
-  };
-  folder.subfolders.push(sub);
-  data.lastModified = Date.now();
-  await writeData(data);
-  notifyChanged();
-  return sub;
-}
-
-/**
- * 重命名子文件夹
- * @param {string} folderId - 父文件夹ID
- * @param {string} subId - 子文件夹ID
- * @param {string} name - 新的子文件夹名称
- */
-export async function renameSubfolder(folderId, subId, name) {
-  const data = await readData();
-  const folder = data.folders.find(f => f.id === folderId);
-  const sub = folder && folder.subfolders && folder.subfolders.find(s => s.id === subId);
-  if (!sub) return; // 子文件夹不存在则返回
-
-  sub.name = name;
-  data.lastModified = Date.now();
-  await writeData(data);
-  notifyChanged();
-}
-
-/**
- * 删除子文件夹
- * @param {string} folderId - 父文件夹ID
- * @param {string} subId - 要删除的子文件夹ID
- */
-export async function deleteSubfolder(folderId, subId) {
-  const data = await readData();
-  const folder = data.folders.find(f => f.id === folderId);
-  if (!folder) return; // 父文件夹不存在则返回
-
-  const idx = (folder.subfolders || []).findIndex(s => s.id === subId);
-  if (idx >= 0) {
-    folder.subfolders.splice(idx, 1); // 从数组中移除子文件夹
-    data.lastModified = Date.now();
-    await writeData(data);
-    notifyChanged();
+  
+  // 不能移动到自己或自己的子文件夹
+  if (folderId === newParentId || (newParentId && isAncestor(data.folders, folderId, newParentId))) {
+    return false;
   }
+
+  // 找到要移动的文件夹
+  const folder = findFolderById(data.folders, folderId);
+  if (!folder) return false;
+
+  // 从原位置移除
+  function removeFromArray(folders) {
+    for (let i = 0; i < folders.length; i++) {
+      if (folders[i].id === folderId) {
+        folders.splice(i, 1);
+        return true;
+      }
+      if (folders[i].children && removeFromArray(folders[i].children)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  if (!removeFromArray(data.folders)) return false;
+
+  // 更新父ID
+  folder.parentId = newParentId;
+
+  // 添加到新位置
+  if (newParentId) {
+    const newParent = findFolderById(data.folders, newParentId);
+    if (!newParent) return false;
+    newParent.children = newParent.children || [];
+    newParent.children.push(folder);
+  } else {
+    data.folders.push(folder);
+  }
+
+  data.lastModified = Date.now();
+  await writeData(data);
+  notifyChanged();
+  return true;
 }
 
 /**
@@ -282,18 +414,16 @@ export async function deleteSubfolder(folderId, subId) {
  * 添加书签
  * @param {Object} params - 书签参数
  * @param {string} params.folderId - 文件夹ID
- * @param {string} [params.subId] - 子文件夹ID（可选）
  * @param {string} params.url - 书签URL
  * @param {string} [params.name] - 书签名称，如果未提供则从URL推测
  * @param {string} [params.iconUrl] - 图标URL
  * @param {string} [params.iconDataUrl] - 图标数据URL（base64）
  * @param {Object} [params.mono] - 单色图标配置
  * @param {string} [params.remark] - 备注信息
- * @returns {Promise<Object|null>} 创建的书签对象，如果目标容器不存在则返回null
+ * @returns {Promise<Object|null>} 创建的书签对象，如果目标文件夹不存在则返回null
  */
 export async function addBookmark({
   folderId,
-  subId,
   url,
   name,
   iconUrl,
@@ -302,8 +432,8 @@ export async function addBookmark({
   remark
 }) {
   const data = await readData();
-  const target = locateContainer(data, folderId, subId);
-  if (!target) return null; // 目标容器不存在
+  const folder = findFolderById(data.folders, folderId);
+  if (!folder) return null; // 目标文件夹不存在
 
   const title = name || guessTitleFromUrl(url); // 如果没有提供名称，从URL推测
   const bookmark = {
@@ -317,35 +447,31 @@ export async function addBookmark({
     remark: remark || '' // 备注信息
   };
 
-  target.bookmarks = target.bookmarks || [];
-  target.bookmarks.push(bookmark);
+  folder.bookmarks = folder.bookmarks || [];
+  folder.bookmarks.push(bookmark);
   data.lastModified = Date.now();
   await writeData(data);
   notifyChanged();
   return bookmark;
 }
 
-
-
 /**
  * 删除书签
  * @param {Object} params - 参数对象
  * @param {string} params.folderId - 文件夹ID
- * @param {string} [params.subId] - 子文件夹ID（可选）
  * @param {string} params.bookmarkId - 要删除的书签ID
  */
 export async function deleteBookmark({
   folderId,
-  subId,
   bookmarkId
 }) {
   const data = await readData();
-  const target = locateContainer(data, folderId, subId);
-  if (!target) return; // 目标容器不存在则返回
+  const folder = findFolderById(data.folders, folderId);
+  if (!folder) return; // 目标文件夹不存在则返回
 
-  const idx = (target.bookmarks || []).findIndex(b => b.id === bookmarkId);
+  const idx = (folder.bookmarks || []).findIndex(b => b.id === bookmarkId);
   if (idx >= 0) {
-    target.bookmarks.splice(idx, 1); // 从数组中移除书签
+    folder.bookmarks.splice(idx, 1); // 从数组中移除书签
     data.lastModified = Date.now();
     await writeData(data);
     notifyChanged();
@@ -356,21 +482,19 @@ export async function deleteBookmark({
  * 更新书签为单色图标
  * @param {Object} params - 参数对象
  * @param {string} params.folderId - 文件夹ID
- * @param {string} [params.subId] - 子文件夹ID（可选）
  * @param {string} params.bookmarkId - 书签ID
  * @param {string} [params.letter] - 图标字母，默认取书签名称首字母
  * @param {string} [params.color] - 图标颜色，默认根据字母生成
  */
 export async function updateBookmarkMono({
   folderId,
-  subId,
   bookmarkId,
   letter,
   color
 }) {
   const data = await readData();
-  const target = locateContainer(data, folderId, subId);
-  const bm = target?.bookmarks?.find(b => b.id === bookmarkId);
+  const folder = findFolderById(data.folders, folderId);
+  const bm = folder?.bookmarks?.find(b => b.id === bookmarkId);
   if (!bm) return; // 书签不存在则返回
 
   bm.iconType = 'mono'; // 设置图标类型为单色
@@ -384,12 +508,10 @@ export async function updateBookmarkMono({
   notifyChanged();
 }
 
-
 /**
  * 更新书签信息（通用更新方法）
  * @param {Object} params - 参数对象
  * @param {string} params.folderId - 文件夹ID
- * @param {string} [params.subId] - 子文件夹ID（可选）
  * @param {string} params.bookmarkId - 书签ID
  * @param {string} [params.url] - 新的URL
  * @param {string} [params.name] - 新的名称
@@ -400,7 +522,6 @@ export async function updateBookmarkMono({
  */
 export async function updateBookmark({
   folderId,
-  subId,
   bookmarkId,
   url,
   name,
@@ -410,8 +531,8 @@ export async function updateBookmark({
   mono
 }) {
   const data = await readData();
-  const target = locateContainer(data, folderId, subId);
-  const bm = target?.bookmarks?.find(b => b.id === bookmarkId);
+  const folder = findFolderById(data.folders, folderId);
+  const bm = folder?.bookmarks?.find(b => b.id === bookmarkId);
   if (!bm) return; // 书签不存在则返回
 
   // 更新基本信息
@@ -441,19 +562,17 @@ export async function updateBookmark({
  * 更新书签备注
  * @param {Object} params - 参数对象
  * @param {string} params.folderId - 文件夹ID
- * @param {string} [params.subId] - 子文件夹ID（可选）
  * @param {string} params.bookmarkId - 书签ID
  * @param {string} params.remark - 备注内容
  */
 export async function updateBookmarkRemark({
   folderId,
-  subId,
   bookmarkId,
   remark
 }) {
   const data = await readData();
-  const target = locateContainer(data, folderId, subId);
-  const bm = target?.bookmarks?.find(b => b.id === bookmarkId);
+  const folder = findFolderById(data.folders, folderId);
+  const bm = folder?.bookmarks?.find(b => b.id === bookmarkId);
   if (!bm) return; // 书签不存在则返回
 
   bm.remark = remark || '';
@@ -463,85 +582,33 @@ export async function updateBookmarkRemark({
 }
 
 /**
- * ===========================================
- * 业务操作：子文件夹移动
- * ===========================================
- */
-
-/**
- * 移动子文件夹到目标一级文件夹
- * @param {Object} params - 参数对象
- * @param {string} params.sourceParentId - 源一级文件夹ID
- * @param {string} params.subId - 要移动的子文件夹ID
- * @param {string} params.targetParentId - 目标一级文件夹ID
- * @returns {Promise<boolean>} 移动是否成功
- */
-export async function moveSubfolder({
-  sourceParentId,
-  subId,
-  targetParentId
-}) {
-  const data = await readData();
-  const sourceFolder = data.folders.find(f => f.id === sourceParentId);
-  const targetFolder = data.folders.find(f => f.id === targetParentId);
-
-  if (!sourceFolder || !targetFolder) return false; // 源或目标文件夹不存在
-  if (sourceParentId === targetParentId) return false; // 源和目标相同
-
-  const subIdx = (sourceFolder.subfolders || []).findIndex(s => s.id === subId);
-  if (subIdx < 0) return false; // 子文件夹不存在
-
-  // 从源文件夹移除子文件夹
-  const [subfolder] = sourceFolder.subfolders.splice(subIdx, 1);
-
-  // 添加到目标文件夹
-  targetFolder.subfolders = targetFolder.subfolders || [];
-  targetFolder.subfolders.push(subfolder);
-
-  data.lastModified = Date.now();
-  await writeData(data);
-  notifyChanged();
-  return true;
-}
-
-/**
- * ===========================================
- * 业务操作：书签移动和排序
- * ===========================================
- */
-
-/**
- * 移动书签到目标文件夹/子文件夹
+ * 移动书签到目标文件夹
  * @param {Object} params - 参数对象
  * @param {string} params.sourceFolderId - 源文件夹ID
- * @param {string} [params.sourceSubId] - 源子文件夹ID（可选）
  * @param {string} params.bookmarkId - 要移动的书签ID
  * @param {string} params.targetFolderId - 目标文件夹ID
- * @param {string} [params.targetSubId] - 目标子文件夹ID（可选）
  * @returns {Promise<boolean>} 移动是否成功
  */
 export async function moveBookmark({
   sourceFolderId,
-  sourceSubId,
   bookmarkId,
-  targetFolderId,
-  targetSubId
+  targetFolderId
 }) {
   const data = await readData();
-  const src = locateContainer(data, sourceFolderId, sourceSubId || null);
-  const dst = locateContainer(data, targetFolderId, targetSubId || null);
+  const sourceFolder = findFolderById(data.folders, sourceFolderId);
+  const targetFolder = findFolderById(data.folders, targetFolderId);
 
-  if (!src || !dst) return false; // 源或目标容器不存在
+  if (!sourceFolder || !targetFolder) return false; // 源或目标文件夹不存在
 
-  const idx = (src.bookmarks || []).findIndex(b => b.id === bookmarkId);
+  const idx = (sourceFolder.bookmarks || []).findIndex(b => b.id === bookmarkId);
   if (idx < 0) return false; // 书签不存在
 
-  // 从源容器移除书签
-  const [bm] = src.bookmarks.splice(idx, 1);
+  // 从源文件夹移除书签
+  const [bm] = sourceFolder.bookmarks.splice(idx, 1);
 
-  // 添加到目标容器
-  dst.bookmarks = dst.bookmarks || [];
-  dst.bookmarks.push(bm);
+  // 添加到目标文件夹
+  targetFolder.bookmarks = targetFolder.bookmarks || [];
+  targetFolder.bookmarks.push(bm);
 
   data.lastModified = Date.now();
   await writeData(data);
@@ -553,21 +620,19 @@ export async function moveBookmark({
  * 书签拖拽排序：将sourceId书签拖到targetId书签之前
  * @param {Object} params - 参数对象
  * @param {string} params.folderId - 文件夹ID
- * @param {string} [params.subId] - 子文件夹ID（可选）
  * @param {string} params.sourceId - 要移动的书签ID
  * @param {string} params.targetId - 目标位置书签ID
  */
 export async function reorderBookmarksRelative({
   folderId,
-  subId,
   sourceId,
   targetId
 }) {
   const data = await readData();
-  const container = locateContainer(data, folderId, subId);
-  if (!container) return; // 容器不存在则返回
+  const folder = findFolderById(data.folders, folderId);
+  if (!folder) return; // 文件夹不存在则返回
 
-  const list = container.bookmarks || [];
+  const list = folder.bookmarks || [];
   const from = list.findIndex(b => b.id === sourceId);
   const to = list.findIndex(b => b.id === targetId);
 
@@ -578,7 +643,7 @@ export async function reorderBookmarksRelative({
   const insertIndex = from < to ? to - 1 : to; // 计算插入位置
   list.splice(insertIndex, 0, item); // 插入到新位置
 
-  container.bookmarks = list;
+  folder.bookmarks = list;
   data.lastModified = Date.now();
   await writeData(data);
   notifyChanged();
@@ -589,20 +654,6 @@ export async function reorderBookmarksRelative({
  * 工具函数
  * ===========================================
  */
-
-/**
- * 定位容器（文件夹或子文件夹）
- * @param {Object} data - 数据对象
- * @param {string} folderId - 文件夹ID
- * @param {string} [subId] - 子文件夹ID（可选）
- * @returns {Object|null} 找到的容器对象，如果不存在则返回null
- */
-export function locateContainer(data, folderId, subId) {
-  const folder = data.folders.find(f => f.id === folderId);
-  if (!folder) return null; // 文件夹不存在
-  if (!subId) return folder; // 没有指定子文件夹，返回文件夹本身
-  return (folder.subfolders || []).find(s => s.id === subId) || null;
-}
 
 /**
  * 从URL推测标题
@@ -670,23 +721,22 @@ export function isDataEmpty(data) {
     return true;
   }
   
-  // 检查是否所有文件夹都是空的（没有书签也没有子文件夹）
-  const hasContent = data.folders.some(folder => {
+  // 递归检查文件夹是否有内容
+  function hasContentInFolder(folder) {
     // 检查文件夹是否有书签
     if (Array.isArray(folder.bookmarks) && folder.bookmarks.length > 0) {
       return true;
     }
     
-    // 检查文件夹是否有非空的子文件夹
-    if (Array.isArray(folder.subfolders)) {
-      return folder.subfolders.some(subfolder => {
-        return Array.isArray(subfolder.bookmarks) && subfolder.bookmarks.length > 0;
-      });
+    // 递归检查子文件夹
+    if (Array.isArray(folder.children)) {
+      return folder.children.some(child => hasContentInFolder(child));
     }
     
     return false;
-  });
+  }
   
+  const hasContent = data.folders.some(folder => hasContentInFolder(folder));
   return !hasContent;
 }
 
@@ -700,4 +750,57 @@ export function notifyChanged() {
   }).catch(() => {
     // 忽略发送失败的错误（可能是没有监听器）
   });
+}
+
+/**
+ * ===========================================
+ * 兼容性函数（向后兼容旧的API）
+ * ===========================================
+ */
+
+/**
+ * 添加子文件夹 - 兼容旧API
+ * @deprecated 使用 addFolder(name, parentId) 代替
+ */
+export async function addSubfolder(folderId, name) {
+  return await addFolder(name, folderId);
+}
+
+/**
+ * 重命名子文件夹 - 兼容旧API
+ * @deprecated 使用 renameFolder(folderId, newName) 代替
+ */
+export async function renameSubfolder(folderId, subId, name) {
+  return await renameFolder(subId, name);
+}
+
+/**
+ * 删除子文件夹 - 兼容旧API
+ * @deprecated 使用 deleteFolder(folderId) 代替
+ */
+export async function deleteSubfolder(folderId, subId) {
+  return await deleteFolder(subId);
+}
+
+/**
+ * 移动子文件夹 - 兼容旧API
+ * @deprecated 使用 moveFolder(folderId, newParentId) 代替
+ */
+export async function moveSubfolder({
+  sourceParentId,
+  subId,
+  targetParentId
+}) {
+  return await moveFolder(subId, targetParentId);
+}
+
+/**
+ * 定位容器 - 兼容旧API
+ * @deprecated 使用 findFolderById(folders, folderId) 代替
+ */
+export function locateContainer(data, folderId, subId) {
+  if (subId) {
+    return findFolderById(data.folders, subId);
+  }
+  return findFolderById(data.folders, folderId);
 }

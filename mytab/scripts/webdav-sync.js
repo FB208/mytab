@@ -113,37 +113,39 @@ export function getLocalDataTimestamp(localData) {
   // 策略2：递归遍历所有文件夹和书签，获取最新的时间戳
   let latestTime = 0;
   
+  // 递归遍历文件夹树的函数
+  function traverseFolder(folder) {
+    // 检查文件夹本身的时间戳
+    if (folder.createdAt) latestTime = Math.max(latestTime, folder.createdAt);
+    if (folder.updatedAt) latestTime = Math.max(latestTime, folder.updatedAt);
+    
+    // 检查文件夹内的书签
+    if (folder.bookmarks) {
+      folder.bookmarks.forEach(bookmark => {
+        if (bookmark.createdAt) latestTime = Math.max(latestTime, bookmark.createdAt);
+        if (bookmark.updatedAt) latestTime = Math.max(latestTime, bookmark.updatedAt);
+      });
+    }
+    
+    // 递归检查子文件夹（新的无限层级结构）
+    if (folder.children) {
+      folder.children.forEach(child => {
+        traverseFolder(child);
+      });
+    }
+    
+    // 向后兼容：检查旧的subfolders字段
+    if (folder.subfolders) {
+      folder.subfolders.forEach(subfolder => {
+        traverseFolder(subfolder);
+      });
+    }
+  }
+  
   // 检查主文件夹列表
   if (localData?.folders) {
     localData.folders.forEach(folder => {
-      // 检查文件夹本身的时间戳
-      if (folder.createdAt) latestTime = Math.max(latestTime, folder.createdAt);
-      if (folder.updatedAt) latestTime = Math.max(latestTime, folder.updatedAt);
-      
-      // 检查文件夹内的书签
-      if (folder.bookmarks) {
-        folder.bookmarks.forEach(bookmark => {
-          if (bookmark.createdAt) latestTime = Math.max(latestTime, bookmark.createdAt);
-          if (bookmark.updatedAt) latestTime = Math.max(latestTime, bookmark.updatedAt);
-        });
-      }
-      
-      // 递归检查子文件夹
-      if (folder.subfolders) {
-        folder.subfolders.forEach(subfolder => {
-          // 检查子文件夹本身的时间戳
-          if (subfolder.createdAt) latestTime = Math.max(latestTime, subfolder.createdAt);
-          if (subfolder.updatedAt) latestTime = Math.max(latestTime, subfolder.updatedAt);
-          
-          // 检查子文件夹内的书签
-          if (subfolder.bookmarks) {
-            subfolder.bookmarks.forEach(bookmark => {
-              if (bookmark.createdAt) latestTime = Math.max(latestTime, bookmark.createdAt);
-              if (bookmark.updatedAt) latestTime = Math.max(latestTime, bookmark.updatedAt);
-            });
-          }
-        });
-      }
+      traverseFolder(folder);
     });
   }
   
@@ -161,25 +163,33 @@ export function getLocalDataTimestamp(localData) {
 export function stripIconDataUrls(data) {
   if (!data || !Array.isArray(data.folders)) return;
   
-  // 递归遍历所有文件夹和书签，删除图标数据
-  data.folders.forEach(folder => {
-    // 清理主文件夹中的书签图标
+  // 递归清理文件夹树的函数
+  function cleanFolder(folder) {
+    // 清理文件夹中的书签图标
     if (Array.isArray(folder.bookmarks)) {
       folder.bookmarks.forEach(b => { 
         if (b && 'iconDataUrl' in b) delete b.iconDataUrl; 
       });
     }
     
-    // 清理子文件夹中的书签图标
-    if (Array.isArray(folder.subfolders)) {
-      folder.subfolders.forEach(sub => {
-        if (Array.isArray(sub.bookmarks)) {
-          sub.bookmarks.forEach(b => { 
-            if (b && 'iconDataUrl' in b) delete b.iconDataUrl; 
-          });
-        }
+    // 递归清理子文件夹（新的无限层级结构）
+    if (Array.isArray(folder.children)) {
+      folder.children.forEach(child => {
+        cleanFolder(child);
       });
     }
+    
+    // 向后兼容：清理旧的subfolders字段
+    if (Array.isArray(folder.subfolders)) {
+      folder.subfolders.forEach(sub => {
+        cleanFolder(sub);
+      });
+    }
+  }
+  
+  // 递归遍历所有文件夹和书签，删除图标数据
+  data.folders.forEach(folder => {
+    cleanFolder(folder);
   });
 }
 
