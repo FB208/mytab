@@ -120,7 +120,7 @@
   async function readAllFromShim() {
     const DEFAULT_BG_URL = 'https://qiniu.markup.com.cn/20250814115835258.jpg';
     // 默认数据中不包含背景图片URL，保持与storage.js一致
-    const DEFAULT_DATA = { folders: [], backgroundImage: '', lastModified: Date.now() };
+    const DEFAULT_DATA = { folders: [], backgroundImage: '', lastModified: new Date('2020-01-01').getTime() };
     const DEFAULT_SETTINGS = { webdav: { url: '', username: '', password: '' }, backup: { enabled: true, frequencyHours: 4, maxSnapshots: 100 }, theme: {} };
     const data = readLocal('data', DEFAULT_DATA);
     const settings = readLocal('settings', DEFAULT_SETTINGS);
