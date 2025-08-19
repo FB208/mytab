@@ -29,6 +29,7 @@ const els = {
   checkCloud: document.getElementById('btn-check-cloud'), // 检查云端更新按钮
   refresh: document.getElementById('btn-refresh-list'), // 刷新备份列表按钮
   list: document.getElementById('backup-list'),     // 备份历史列表容器
+  importBookmarks: document.getElementById('btn-import-bookmarks'), // 导入书签按钮
   bgUrl: document.getElementById('bg-url'),          // 背景图片URL输入框
   bgSave: document.getElementById('btn-bg-save')    // 保存背景按钮
 };
@@ -227,6 +228,14 @@ function bind() {
   els.refresh.addEventListener('click', refreshList);
 
   /**
+   * 导入书签按钮点击事件
+   * 导入浏览器书签到本插件中
+   */
+  els.importBookmarks.addEventListener('click', async () => {
+    await handleImportBookmarks();
+  });
+
+  /**
    * 保存背景图片按钮点击事件
    * 保存用户设置的背景图片URL
    */
@@ -346,4 +355,308 @@ function toast(text, duration = 1800) {
   document.body.appendChild(t);
   setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity .3s'; }, duration - 300);
   setTimeout(() => t.remove(), duration);
+}
+
+/**
+ * ===========================================
+ * 书签导入功能
+ * ===========================================
+ */
+
+/**
+ * 处理书签导入按钮点击事件
+ * 检测当前环境，在插件模式下导入书签，在web模式下显示提示
+ */
+async function handleImportBookmarks() {
+  try {
+    // 检测是否为插件模式
+    const isExtensionMode = !window.__MYTAB_USE_PROXY__;
+    
+    console.log('书签导入 - 环境检测:', {
+      isExtensionMode,
+      hasChrome: !!window.chrome,
+      hasBookmarksAPI: !!(window.chrome && window.chrome.bookmarks),
+      hasPermissionsAPI: !!(window.chrome && window.chrome.permissions)
+    });
+    
+    if (!isExtensionMode) {
+      // Web模式下不支持书签导入
+      alert('该功能仅插件模式支持，在网页版本中无法使用。');
+      return;
+    }
+
+    // 检查Chrome扩展环境
+    if (!window.chrome) {
+      toast('✗ Chrome扩展环境不可用');
+      return;
+    }
+
+    // 检查书签API是否可用
+    if (!chrome.bookmarks) {
+      toast('✗ 书签API不可用，请重新加载扩展');
+      console.error('书签API不可用，请检查manifest.json中的权限配置');
+      return;
+    }
+
+    // 显示加载状态
+    els.importBookmarks.disabled = true;
+    const oldText = els.importBookmarks.textContent;
+    els.importBookmarks.textContent = '导入中...';
+    
+    toast('正在读取书签数据...');
+
+    // 读取浏览器书签
+    const bookmarkTree = await chrome.bookmarks.getTree();
+    
+    // 转换书签数据
+    const importedData = await convertBookmarksToMyTab(bookmarkTree);
+    
+    if (importedData.folders.length === 0) {
+      toast('没有找到可导入的书签');
+      return;
+    }
+
+    // 显示导入确认对话框
+    const shouldImport = await showImportConfirmDialog(importedData);
+    if (!shouldImport) {
+      toast('已取消导入');
+      return;
+    }
+
+    // 执行导入
+    await performBookmarkImport(importedData);
+    
+    toast('✓ 书签导入成功！');
+    
+  } catch (error) {
+    console.error('书签导入失败:', error);
+    toast('✗ 导入失败: ' + (error.message || error));
+  } finally {
+    // 恢复按钮状态
+    els.importBookmarks.disabled = false;
+    els.importBookmarks.textContent = '导入浏览器书签';
+  }
+}
+
+/**
+ * 请求书签权限
+ * @returns {Promise<boolean>} 是否获得权限
+ */
+async function requestBookmarksPermission() {
+  try {
+    // 检查是否已有权限
+    const hasPermission = await chrome.permissions.contains({
+      permissions: ['bookmarks']
+    });
+    
+    if (hasPermission) {
+      return true;
+    }
+    
+    // 请求权限
+    const granted = await chrome.permissions.request({
+      permissions: ['bookmarks']
+    });
+    
+    return granted;
+  } catch (error) {
+    console.error('权限请求失败:', error);
+    return false;
+  }
+}
+
+/**
+ * 将Chrome书签数据转换为MyTab格式
+ * @param {Array} bookmarkTree - Chrome书签树
+ * @returns {Promise<Object>} 转换后的数据
+ */
+async function convertBookmarksToMyTab(bookmarkTree) {
+  const { generateId } = await import('./storage.js');
+  
+  const result = {
+    folders: [],
+    stats: {
+      foldersCount: 0,
+      bookmarksCount: 0
+    }
+  };
+
+  /**
+   * 递归转换书签节点
+   * @param {Object} node - Chrome书签节点
+   * @param {string|null} parentId - 父文件夹ID
+   * @returns {Object|null} 转换后的节点
+   */
+  function convertNode(node, parentId = null) {
+    if (node.url) {
+      // 书签节点
+      result.stats.bookmarksCount++;
+      return {
+        id: generateId('b'),
+        title: node.title || '无标题书签',
+        url: node.url,
+        icon: '', // 默认为空，由系统自动获取
+        dateAdded: node.dateAdded || Date.now()
+      };
+    } else if (node.children) {
+      // 文件夹节点
+      const folder = {
+        id: generateId('f'),
+        name: node.title || '无名文件夹',
+        icon: '📁',
+        type: 'folder',
+        parentId: parentId,
+        bookmarks: [],
+        children: []
+      };
+
+      // 处理子节点
+      for (const child of node.children) {
+        const converted = convertNode(child, folder.id);
+        if (converted) {
+          if (converted.url) {
+            // 是书签
+            folder.bookmarks.push(converted);
+          } else {
+            // 是子文件夹
+            folder.children.push(converted);
+          }
+        }
+      }
+
+      // 只有包含书签或子文件夹的文件夹才被保留
+      if (folder.bookmarks.length > 0 || folder.children.length > 0) {
+        result.stats.foldersCount++;
+        return folder;
+      }
+    }
+    
+    return null;
+  }
+
+  // 从根节点开始转换，通常是 bookmarkTree[0]
+  if (bookmarkTree && bookmarkTree.length > 0) {
+    const rootNode = bookmarkTree[0];
+    
+    console.log('读取到的根书签节点:', rootNode);
+    
+    if (rootNode.children) {
+      // 定义一个临时数组来收集所有要导入的文件夹
+      const foldersToImport = [];
+      
+      // 处理每一个顶级文件夹
+      for (const child of rootNode.children) {
+        console.log('顶级文件夹/节点:', child.title, child);
+        
+        // 如果是系统文件夹（书签栏或其他书签）
+        if (isSystemBookmarkFolder(child)) {
+          // 创建一个新文件夹，使用系统文件夹名称
+          const systemFolder = {
+            id: generateId('f'),
+            name: child.title,
+            icon: '📁',
+            type: 'folder',
+            parentId: null,
+            bookmarks: [],
+            children: []
+          };
+          
+          // 处理该系统文件夹下的所有内容
+          if (child.children) {
+            for (const subItem of child.children) {
+              const converted = convertNode(subItem, systemFolder.id);
+              if (converted) {
+                if (converted.url) {
+                  // 是书签
+                  systemFolder.bookmarks.push(converted);
+                } else {
+                  // 是子文件夹
+                  systemFolder.children.push(converted);
+                }
+              }
+            }
+          }
+          
+          // 只有当有内容时才添加该文件夹
+          if (systemFolder.bookmarks.length > 0 || systemFolder.children.length > 0) {
+            result.stats.foldersCount++;
+            foldersToImport.push(systemFolder);
+          }
+        } else {
+          // 非系统文件夹，直接转换
+          const converted = convertNode(child, null);
+          if (converted) {
+            foldersToImport.push(converted);
+          }
+        }
+      }
+      
+      // 将收集到的所有文件夹添加到结果中
+      result.folders = foldersToImport;
+    }
+  }
+
+  return result;
+}
+
+/**
+ * 检查是否为系统书签文件夹
+ * @param {Object} node - 书签节点
+ * @returns {boolean} 是否为系统文件夹
+ */
+function isSystemBookmarkFolder(node) {
+  // Chrome系统文件夹的特殊标识
+  const systemFolderIds = ['1', '2']; // 1=书签栏, 2=其他书签
+  const systemFolderTitles = [
+    'Bookmarks bar', '书签栏', '书签列',
+    'Other bookmarks', '其他书签', '其他書籤',
+    'Mobile bookmarks', '手机书签', '移动设备书签'
+  ];
+  
+  return systemFolderIds.includes(node.id) || 
+         systemFolderTitles.includes(node.title);
+}
+
+/**
+ * 显示导入确认对话框
+ * @param {Object} importedData - 转换后的书签数据
+ * @returns {Promise<boolean>} 用户是否确认导入
+ */
+async function showImportConfirmDialog(importedData) {
+  const { stats } = importedData;
+  
+  const message = 
+    `准备导入以下数据：\n\n` +
+    `文件夹数量：${stats.foldersCount} 个\n` +
+    `书签数量：${stats.bookmarksCount} 个\n\n` +
+    `导入方式：将新数据添加到现有数据之后（不会覆盖现有数据）\n\n` +
+    `是否继续？`;
+  
+  return confirm(message);
+}
+
+/**
+ * 执行书签导入
+ * @param {Object} importedData - 要导入的数据
+ */
+async function performBookmarkImport(importedData) {
+  // 读取现有数据
+  const { data } = await readAll();
+  
+  // 将导入的文件夹添加到现有数据中
+  data.folders = data.folders.concat(importedData.folders);
+  
+  // 更新修改时间
+  data.lastModified = Date.now();
+  
+  // 保存数据
+  await writeData(data);
+  
+  // 通知数据变更（如果在插件模式下）
+  try {
+    await chrome.runtime.sendMessage({ type: 'data:changed' });
+  } catch (error) {
+    // 在web模式下可能会失败，忽略错误
+    console.log('数据变更通知失败（正常）:', error);
+  }
 }
