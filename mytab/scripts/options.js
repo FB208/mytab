@@ -412,6 +412,10 @@ async function handleImportBookmarks() {
     const importedData = await convertBookmarksToMyTab(bookmarkTree);
     
     if (importedData.folders.length === 0) {
+      // 恢复按钮状态
+      els.importBookmarks.disabled = false;
+      els.importBookmarks.textContent = '导入浏览器书签';
+      
       toast('没有找到可导入的书签');
       return;
     }
@@ -419,22 +423,46 @@ async function handleImportBookmarks() {
     // 显示导入确认对话框
     const shouldImport = await showImportConfirmDialog(importedData);
     if (!shouldImport) {
+      // 恢复按钮状态
+      els.importBookmarks.disabled = false;
+      els.importBookmarks.textContent = '导入浏览器书签';
+      
       toast('已取消导入');
       return;
     }
 
     // 执行导入
-    await performBookmarkImport(importedData);
-    
-    toast('✓ 书签导入成功！');
+    console.log('开始执行书签导入...');
+    try {
+      await performBookmarkImport(importedData);
+      console.log('书签导入完成');
+      
+      // 恢复按钮状态
+      els.importBookmarks.disabled = false;
+      els.importBookmarks.textContent = '导入浏览器书签';
+      
+      // 显示成功提示
+      toast('✓ 书签导入成功！共导入 ' + importedData.stats.foldersCount + ' 个文件夹，' + importedData.stats.bookmarksCount + ' 个书签', 3000);
+    } catch (importError) {
+      console.error('执行导入时出错:', importError);
+      
+      // 恢复按钮状态
+      els.importBookmarks.disabled = false;
+      els.importBookmarks.textContent = '导入浏览器书签';
+      
+      // 显示错误提示
+      toast('✗ 导入失败: ' + (importError.message || importError), 3000);
+    }
     
   } catch (error) {
     console.error('书签导入失败:', error);
-    toast('✗ 导入失败: ' + (error.message || error));
-  } finally {
+    
     // 恢复按钮状态
     els.importBookmarks.disabled = false;
     els.importBookmarks.textContent = '导入浏览器书签';
+    
+    // 显示错误提示
+    toast('✗ 导入失败: ' + (error.message || error), 3000);
   }
 }
 
@@ -640,21 +668,57 @@ async function showImportConfirmDialog(importedData) {
  * @param {Object} importedData - 要导入的数据
  */
 async function performBookmarkImport(importedData) {
+  console.log('开始读取现有数据...');
   // 读取现有数据
   const { data } = await readAll();
+  console.log('现有数据:', { foldersCount: data.folders?.length || 0 });
+  
+  // 确保 folders 是数组
+  if (!Array.isArray(data.folders)) {
+    console.warn('data.folders 不是数组，初始化为空数组');
+    data.folders = [];
+  }
+  
+  console.log('将要导入的数据:', { foldersCount: importedData.folders?.length || 0 });
   
   // 将导入的文件夹添加到现有数据中
   data.folders = data.folders.concat(importedData.folders);
+  console.log('合并后的数据:', { foldersCount: data.folders.length });
   
   // 更新修改时间
   data.lastModified = Date.now();
   
   // 保存数据
+  console.log('开始保存数据...');
   await writeData(data);
+  console.log('数据保存完成');
   
   // 通知数据变更（如果在插件模式下）
   try {
-    await chrome.runtime.sendMessage({ type: 'data:changed' });
+    console.log('发送数据变更通知...');
+    // 设置超时，避免无限等待
+    const sendMessageWithTimeout = new Promise((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        resolve({ timeout: true });
+      }, 1000); // 1秒超时
+      
+      chrome.runtime.sendMessage({ type: 'data:changed' })
+        .then(response => {
+          clearTimeout(timeoutId);
+          resolve(response);
+        })
+        .catch(error => {
+          clearTimeout(timeoutId);
+          reject(error);
+        });
+    });
+    
+    const response = await sendMessageWithTimeout;
+    if (response?.timeout) {
+      console.log('数据变更通知已发送（未等待响应）');
+    } else {
+      console.log('数据变更通知发送成功', response);
+    }
   } catch (error) {
     // 在web模式下可能会失败，忽略错误
     console.log('数据变更通知失败（正常）:', error);
