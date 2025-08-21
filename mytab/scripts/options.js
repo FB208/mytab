@@ -592,22 +592,31 @@ async function requestWebdavPermissions(url) {
       return true;
     }
     
-    // 显示前置提示，解释为什么需要权限
-    const shouldProceed = confirm(
-      `为了连接到您的WebDAV服务器，MyTab需要访问您如下域名的权限：\n\n` +
-      `${hostname}\n\n` +
-      `这个权限用于：\n` +
-      `• 测试服务器连接状态\n` +
-      `• 上传和下载备份数据\n\n` +
-      `点击"确定"将打开权限申请对话框，请在浏览器弹窗中选择"允许"。\n\n`
-    );
+    // 直接申请权限，不使用前置确认对话框
+    // 这样可以确保权限申请在用户手势上下文中进行
+    console.log('申请WebDAV权限:', hostname);
     
-    if (!shouldProceed) {
+    let granted;
+    try {
+      // 添加短暂延迟，确保用户操作完成
+      await new Promise(resolve => setTimeout(resolve, 100));
+      granted = await chrome.permissions.request(permissions);
+    } catch (requestError) {
+      console.error('权限申请异常:', requestError);
+      // 如果权限申请抛出异常，可能是因为用户手势上下文丢失
+      alert(
+        `权限申请失败\n\n` +
+        `无法申请访问 ${hostname} 的权限。\n\n` +
+        `可能的原因：\n` +
+        `• 浏览器阻止了权限申请\n` +
+        `• 权限申请超时\n\n` +
+        `解决方法：\n` +
+        `• 请重新点击保存按钮\n` +
+        `• 检查浏览器是否阻止了弹窗\n` +
+        `• 在扩展管理页面手动添加网站权限`
+      );
       return false;
     }
-    
-    // 请求权限
-    const granted = await chrome.permissions.request(permissions);
     
     if (granted) {
       console.log('WebDAV权限申请成功:', hostname);
@@ -616,21 +625,28 @@ async function requestWebdavPermissions(url) {
       console.log('WebDAV权限申请被拒绝:', hostname);
       // 提供更详细的失败说明
       alert(
-        `权限申请失败\n\n` +
-        `无法获取访问 ${hostname} 的权限。\n\n` +
-        `可能的原因：\n` +
-        `• 您在权限对话框中选择了"拒绝"\n` +
-        `• 浏览器阻止了权限申请\n\n` +
-        `解决方法：\n` +
-        `• 重新点击保存按钮再次申请权限\n` +
-        `• 检查浏览器是否阻止了弹窗\n` +
-        `• 在扩展管理页面手动添加网站权限`
+        `权限申请被拒绝\n\n` +
+        `您拒绝了访问 ${hostname} 的权限申请。\n\n` +
+        `如需使用WebDAV功能，请：\n` +
+        `• 重新点击保存按钮并在弹窗中选择"允许"\n` +
+        `• 或在扩展管理页面手动添加网站权限\n\n` +
+        `权限用途：\n` +
+        `• 测试服务器连接状态\n` +
+        `• 上传和下载备份数据`
       );
     }
     
     return granted;
   } catch (error) {
     console.error('WebDAV权限请求失败:', error);
+    alert(
+      `权限申请出现异常\n\n` +
+      `错误信息：${error.message || error}\n\n` +
+      `请尝试：\n` +
+      `• 重新加载扩展\n` +
+      `• 重启浏览器\n` +
+      `• 检查扩展是否正常安装`
+    );
     return false;
   }
 }
