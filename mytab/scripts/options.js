@@ -37,6 +37,16 @@ const els = {
 // 初始化页面
 await init();
 
+// 开发者工具函数 - 在控制台中可以调用
+window.clearWebdavPermissions = async function() {
+  const url = els.url.value;
+  if (!url) {
+    console.log('请先输入WebDAV URL');
+    return;
+  }
+  return await removeWebdavPermissions(url);
+};
+
 /**
  * 页面初始化函数
  * 1. 从存储中读取当前配置并填充表单
@@ -133,6 +143,17 @@ function bind() {
     };
     
     try {
+
+      const webdavUrl = normalizeUrl(els.url.value);
+      if (webdavUrl && webdavUrl.trim()) {
+        // 申请访问外部URL的权限
+        const hasPermission = await requestWebdavPermissions(webdavUrl);
+        if (!hasPermission) {
+          toast('需要权限才能保存WebDAV配置');
+          return;
+        }
+      }
+
       toast('连接测试中...');
       const res = await chrome.runtime.sendMessage({ type: 'webdav:test', config });
       
@@ -483,6 +504,52 @@ async function handleImportBookmarks() {
 }
 
 /**
+ * 清除WebDAV权限（开发测试用）
+ * @param {string} url - WebDAV服务器URL
+ * @returns {Promise<boolean>} 是否成功清除
+ */
+async function removeWebdavPermissions(url) {
+  try {
+    if (!window.chrome || !chrome.permissions) {
+      console.warn('Chrome权限API不可用');
+      return false;
+    }
+
+    // 解析URL获取域名
+    let hostname;
+    try {
+      const urlObj = new URL(url);
+      hostname = urlObj.hostname;
+    } catch (e) {
+      console.error('无效的URL:', url);
+      return false;
+    }
+
+    // 构建权限对象
+    const permissions = {
+      origins: [`*://${hostname}/*`]
+    };
+
+    // 移除权限
+    const removed = await chrome.permissions.remove(permissions);
+    
+    if (removed) {
+      console.log('WebDAV权限已清除:', hostname);
+      toast('✓ 权限已清除，可以重新测试');
+    } else {
+      console.log('权限清除失败或权限不存在:', hostname);
+      toast('权限清除失败或权限不存在');
+    }
+    
+    return removed;
+  } catch (error) {
+    console.error('清除权限失败:', error);
+    toast('清除权限失败: ' + error.message);
+    return false;
+  }
+}
+
+/**
  * 请求WebDAV相关权限
  * @param {string} url - WebDAV服务器URL
  * @returns {Promise<boolean>} 是否获得权限
@@ -525,13 +592,40 @@ async function requestWebdavPermissions(url) {
       return true;
     }
     
+    // 显示前置提示，解释为什么需要权限
+    const shouldProceed = confirm(
+      `为了连接到您的WebDAV服务器，MyTab需要访问您如下域名的权限：\n\n` +
+      `${hostname}\n\n` +
+      `这个权限用于：\n` +
+      `• 测试服务器连接状态\n` +
+      `• 上传和下载备份数据\n\n` +
+      `点击"确定"将打开权限申请对话框，请在浏览器弹窗中选择"允许"。\n\n`
+    );
+    
+    if (!shouldProceed) {
+      return false;
+    }
+    
     // 请求权限
     const granted = await chrome.permissions.request(permissions);
     
     if (granted) {
       console.log('WebDAV权限申请成功:', hostname);
+      toast('✓ 权限申请成功，可以正常使用WebDAV功能');
     } else {
       console.log('WebDAV权限申请被拒绝:', hostname);
+      // 提供更详细的失败说明
+      alert(
+        `权限申请失败\n\n` +
+        `无法获取访问 ${hostname} 的权限。\n\n` +
+        `可能的原因：\n` +
+        `• 您在权限对话框中选择了"拒绝"\n` +
+        `• 浏览器阻止了权限申请\n\n` +
+        `解决方法：\n` +
+        `• 重新点击保存按钮再次申请权限\n` +
+        `• 检查浏览器是否阻止了弹窗\n` +
+        `• 在扩展管理页面手动添加网站权限`
+      );
     }
     
     return granted;
