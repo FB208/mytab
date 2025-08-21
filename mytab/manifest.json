@@ -13,6 +13,12 @@
     "unlimitedStorage",
     "bookmarks"
   ],
+  "optional_permissions": [
+    "activeTab"
+  ],
+  "optional_host_permissions": [
+    "*://*/*"
+  ],
   "background": {
     "service_worker": "background/service_worker.js",
     "type": "module"

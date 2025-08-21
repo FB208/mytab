@@ -85,24 +85,40 @@ function bind() {
    * 收集表单数据并保存到存储中
    */
   els.save.addEventListener('click', async () => {
-    // 构建新的设置对象
-    const next = {
-      webdav: { 
-        url: normalizeUrl(els.url.value), 
-        username: els.username.value, 
-        password: els.password.value 
-      },
-      backup: { 
-        enabled: els.enabled.checked, 
-        frequencyHours: Number(els.hours.value) || 4, 
-        maxSnapshots: Math.max(1, Number(els.max.value) || 100) 
+    try {
+      // 如果设置了WebDAV URL，需要申请相关权限
+      const webdavUrl = normalizeUrl(els.url.value);
+      if (webdavUrl && webdavUrl.trim()) {
+        // 申请访问外部URL的权限
+        const hasPermission = await requestWebdavPermissions(webdavUrl);
+        if (!hasPermission) {
+          toast('需要权限才能保存WebDAV配置');
+          return;
+        }
       }
-    };
-    
-    // 保存到存储
-    await writeSettings(next);
-    toast('已保存');
-    
+
+      // 构建新的设置对象
+      const next = {
+        webdav: { 
+          url: webdavUrl, 
+          username: els.username.value, 
+          password: els.password.value 
+        },
+        backup: { 
+          enabled: els.enabled.checked, 
+          frequencyHours: Number(els.hours.value) || 4, 
+          maxSnapshots: Math.max(1, Number(els.max.value) || 100) 
+        }
+      };
+      
+      // 保存到存储
+      await writeSettings(next);
+      toast('已保存');
+      
+    } catch (error) {
+      console.error('保存设置失败:', error);
+      toast('保存失败: ' + (error.message || error));
+    }
   });
 
   /**
@@ -463,6 +479,65 @@ async function handleImportBookmarks() {
     
     // 显示错误提示
     toast('✗ 导入失败: ' + (error.message || error), 3000);
+  }
+}
+
+/**
+ * 请求WebDAV相关权限
+ * @param {string} url - WebDAV服务器URL
+ * @returns {Promise<boolean>} 是否获得权限
+ */
+async function requestWebdavPermissions(url) {
+  try {
+    // 检测是否为插件模式
+    const isExtensionMode = !window.__MYTAB_USE_PROXY__;
+    
+    if (!isExtensionMode) {
+      // Web模式下不需要权限申请
+      return true;
+    }
+
+    // 检查Chrome扩展环境
+    if (!window.chrome || !chrome.permissions) {
+      console.warn('Chrome权限API不可用');
+      return true; // 在非扩展环境下允许继续
+    }
+
+    // 解析URL获取域名
+    let hostname;
+    try {
+      const urlObj = new URL(url);
+      hostname = urlObj.hostname;
+    } catch (e) {
+      console.error('无效的URL:', url);
+      return false;
+    }
+
+    // 构建权限请求
+    const permissions = {
+      origins: [`*://${hostname}/*`]
+    };
+
+    // 检查是否已有权限
+    const hasPermission = await chrome.permissions.contains(permissions);
+    
+    if (hasPermission) {
+      return true;
+    }
+    
+    // 请求权限
+    const granted = await chrome.permissions.request(permissions);
+    
+    if (granted) {
+      console.log('WebDAV权限申请成功:', hostname);
+    } else {
+      console.log('WebDAV权限申请被拒绝:', hostname);
+    }
+    
+    return granted;
+  } catch (error) {
+    console.error('WebDAV权限请求失败:', error);
+    return false;
   }
 }
 
