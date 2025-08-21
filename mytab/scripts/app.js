@@ -147,6 +147,18 @@ function bindEvents() {
     state.keyword = e.target.value.trim();
     renderBookmarkGrid();
     triggerGlobalSearch(state.keyword);
+    updateSearchClearButton();
+  });
+
+  // 搜索清空按钮事件
+  document.getElementById('search-clear').addEventListener('click', () => {
+    const searchInput = document.getElementById('search');
+    searchInput.value = '';
+    state.keyword = '';
+    renderBookmarkGrid();
+    triggerGlobalSearch('');
+    updateSearchClearButton();
+    searchInput.focus();
   });
 
   // Mobile sidebar toggle
@@ -201,12 +213,13 @@ function bindEvents() {
     data.folders.forEach(folder => {
       const pushItem = (bm, sub) => {
         if (!bm) return;
-        const txt = `${bm.name || ''} ${bm.url || ''}`.toLowerCase();
+        const txt = `${bm.name || ''} ${bm.url || ''} ${bm.remark || ''}`.toLowerCase();
         if (txt.includes(k)) {
           results.push({
             id: bm.id,
             name: bm.name || bm.url,
             url: bm.url,
+            remark: bm.remark,
             iconType: bm.iconType,
             iconUrl: bm.iconUrl,
             mono: bm.mono,
@@ -255,6 +268,18 @@ function bindEvents() {
       url.textContent = it.url;
       meta.appendChild(name);
       meta.appendChild(url);
+      
+      // 如果有备注信息，显示备注
+      if (it.remark && it.remark.trim()) {
+        const remark = document.createElement('div');
+        remark.className = 'remark';
+        remark.textContent = it.remark;
+        remark.style.fontSize = '12px';
+        remark.style.color = '#666';
+        remark.style.marginTop = '2px';
+        meta.appendChild(remark);
+      }
+      
       row.appendChild(cover);
       row.appendChild(meta);
       row.addEventListener('click', () => window.open(it.url, '_blank'));
@@ -980,7 +1005,21 @@ async function renderBookmarkGrid() {
 function matchKeyword(bm, kw) {
   if (!kw) return true;
   const k = kw.toLowerCase();
-  return (bm.name || '').toLowerCase().includes(k) || (bm.url || '').toLowerCase().includes(k);
+  return (bm.name || '').toLowerCase().includes(k) || 
+         (bm.url || '').toLowerCase().includes(k) || 
+         (bm.remark || '').toLowerCase().includes(k);
+}
+
+// 更新搜索清空按钮的显示状态
+function updateSearchClearButton() {
+  const searchInput = document.getElementById('search');
+  const clearButton = document.getElementById('search-clear');
+  
+  if (searchInput.value.trim()) {
+    clearButton.classList.add('visible');
+  } else {
+    clearButton.classList.remove('visible');
+  }
 }
 
 function pickColorFromString(s) {
