@@ -401,6 +401,319 @@ function toast(text, duration = 1800) {
  */
 
 /**
+ * 显示导入选项对话框
+ * @returns {Promise<Object|null>} 导入选项或null（用户取消）
+ */
+async function showImportOptionsDialog() {
+  return new Promise((resolve) => {
+    // 创建遮罩层
+    const backdrop = document.createElement('div');
+    backdrop.className = 'modal-backdrop';
+
+    // 创建对话框容器
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+
+    // 创建对话框面板
+    const panel = document.createElement('div');
+    panel.className = 'panel glass';
+
+    // 创建内容区域
+    const inner = document.createElement('div');
+    inner.className = 'inner';
+
+    // 标题
+    const title = document.createElement('h3');
+    title.textContent = '书签导入选项';
+    title.style.margin = '0 0 20px 0';
+    title.style.fontSize = '18px';
+    title.style.fontWeight = '600';
+    title.style.color = 'var(--text)';
+
+    // 选项说明
+    const description = document.createElement('p');
+    description.textContent = '请选择导入模式（建议首次使用选择增强导入）：';
+    description.style.margin = '0 0 16px 0';
+    description.style.fontSize = '14px';
+    description.style.color = 'var(--text-dim)';
+
+    // 增强导入选项
+    const enhancedOption = document.createElement('label');
+    enhancedOption.className = 'options-inline';
+    enhancedOption.style.display = 'block';
+    enhancedOption.style.marginBottom = '12px';
+    enhancedOption.style.padding = '12px';
+    enhancedOption.style.backgroundColor = 'rgba(255,255,255,0.3)';
+    enhancedOption.style.borderRadius = '8px';
+    enhancedOption.style.border = '1px solid rgba(255,255,255,0.2)';
+    enhancedOption.style.cursor = 'pointer';
+
+    const enhancedRadio = document.createElement('input');
+    enhancedRadio.type = 'radio';
+    enhancedRadio.name = 'importMode';
+    enhancedRadio.value = 'enhanced';
+    enhancedRadio.checked = true;
+
+    const enhancedLabel = document.createElement('div');
+    enhancedLabel.innerHTML = `
+      <strong>🚀 增强导入（推荐）</strong><br>
+      <small style="color: var(--text-dim);">自动获取网站真实标题和 favicon 图标<br>
+      • 支持并发处理，提高导入效率<br>
+      • 显示详细进度和统计信息<br>
+      • 网络错误时自动使用备选方案<br>
+      • 可随时取消，已处理数据会保留</small>
+    `;
+
+    enhancedOption.appendChild(enhancedRadio);
+    enhancedOption.appendChild(enhancedLabel);
+
+    // 快速导入选项
+    const quickOption = document.createElement('label');
+    quickOption.className = 'options-inline';
+    quickOption.style.display = 'block';
+    quickOption.style.marginBottom = '20px';
+    quickOption.style.padding = '12px';
+    quickOption.style.backgroundColor = 'rgba(255,255,255,0.3)';
+    quickOption.style.borderRadius = '8px';
+    quickOption.style.border = '1px solid rgba(255,255,255,0.2)';
+    quickOption.style.cursor = 'pointer';
+
+    const quickRadio = document.createElement('input');
+    quickRadio.type = 'radio';
+    quickRadio.name = 'importMode';
+    quickRadio.value = 'quick';
+
+    const quickLabel = document.createElement('div');
+    quickLabel.innerHTML = `
+      <strong>⚡ 快速导入</strong><br>
+      <small style="color: var(--text-dim);">仅导入书签基本信息（标题、URL）<br>
+      • 速度快，适合大量书签导入<br>
+      • 不获取网站标题和图标<br>
+      • 适合网络环境不佳时使用</small>
+    `;
+
+    quickOption.appendChild(quickRadio);
+    quickOption.appendChild(quickLabel);
+
+    // 按钮容器
+    const buttonContainer = document.createElement('div');
+    buttonContainer.style.display = 'flex';
+    buttonContainer.style.justifyContent = 'flex-end';
+    buttonContainer.style.gap = '12px';
+
+    // 取消按钮
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'ghost-btn';
+    cancelBtn.textContent = '取消';
+    cancelBtn.style.minWidth = '80px';
+
+    // 确认按钮
+    const confirmBtn = document.createElement('button');
+    confirmBtn.className = 'primary-btn';
+    confirmBtn.textContent = '开始导入';
+    confirmBtn.style.minWidth = '100px';
+
+    buttonContainer.appendChild(cancelBtn);
+    buttonContainer.appendChild(confirmBtn);
+
+    // 组装DOM结构
+    inner.appendChild(title);
+    inner.appendChild(description);
+    inner.appendChild(enhancedOption);
+    inner.appendChild(quickOption);
+    inner.appendChild(buttonContainer);
+
+    panel.appendChild(inner);
+    modal.appendChild(panel);
+
+    // 创建完整的对话框结构
+    const dialog = document.createElement('div');
+    dialog.appendChild(backdrop);
+    dialog.appendChild(modal);
+
+    // 添加到页面
+    document.body.appendChild(dialog);
+    document.body.style.overflow = 'hidden';
+
+    // 清理函数
+    const cleanup = () => {
+      document.body.style.overflow = '';
+      dialog.remove();
+    };
+
+    // 取消按钮事件
+    cancelBtn.addEventListener('click', () => {
+      cleanup();
+      resolve(null);
+    });
+
+    // 确认按钮事件
+    confirmBtn.addEventListener('click', () => {
+      const selectedMode = document.querySelector('input[name="importMode"]:checked')?.value || 'enhanced';
+      cleanup();
+      resolve({
+        enhanced: selectedMode === 'enhanced'
+      });
+    });
+
+    // 点击遮罩层取消
+    backdrop.addEventListener('click', () => {
+      cleanup();
+      resolve(null);
+    });
+  });
+}
+
+/**
+ * 显示导入结果对话框
+ * @param {Object} stats - 导入统计信息
+ * @param {Object} importResult - 导入结果详情
+ */
+function showImportResultDialog(stats, importResult = null) {
+  // 创建遮罩层
+  const backdrop = document.createElement('div');
+  backdrop.className = 'modal-backdrop';
+
+  // 创建对话框容器
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+
+  // 创建对话框面板
+  const panel = document.createElement('div');
+  panel.className = 'panel glass';
+
+  // 创建内容区域
+  const inner = document.createElement('div');
+  inner.className = 'inner';
+
+  // 标题
+  const title = document.createElement('h3');
+  title.textContent = '书签导入完成';
+  title.style.margin = '0 0 20px 0';
+  title.style.fontSize = '18px';
+  title.style.fontWeight = '600';
+  title.style.color = 'var(--text)';
+
+  // 成功图标
+  const successIcon = document.createElement('div');
+  successIcon.textContent = '✅';
+  successIcon.style.fontSize = '48px';
+  successIcon.style.textAlign = 'center';
+  successIcon.style.marginBottom = '16px';
+
+  // 统计信息容器
+  const statsContainer = document.createElement('div');
+  statsContainer.style.backgroundColor = 'rgba(255,255,255,0.3)';
+  statsContainer.style.borderRadius = '12px';
+  statsContainer.style.padding = '16px';
+  statsContainer.style.marginBottom = '20px';
+
+  // 基本统计
+  const basicStats = document.createElement('div');
+  basicStats.style.marginBottom = '12px';
+  
+  const foldersCount = stats.foldersCount || 0;
+  const bookmarksCount = stats.bookmarksCount || 0;
+  
+  basicStats.innerHTML = `
+    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+      <span>文件夹数量：</span>
+      <strong>${foldersCount}</strong>
+    </div>
+    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+      <span>书签数量：</span>
+      <strong>${bookmarksCount}</strong>
+    </div>
+  `;
+
+  // 增强统计（如果有）
+  const enhancedStats = document.createElement('div');
+  if (importResult && importResult.stats) {
+    const { successful = 0, failed = 0, processed = 0 } = importResult.stats;
+    const enhancedCount = stats.enhancedBookmarksCount || successful;
+    
+    if (processed > 0) {
+      enhancedStats.innerHTML = `
+        <hr style="margin: 12px 0; border: none; border-top: 1px solid rgba(255,255,255,0.2);">
+        <div style="margin-bottom: 8px; font-weight: 600; color: var(--primary);">增强结果：</div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+          <span>成功增强：</span>
+          <strong style="color: #10b981;">${successful}</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+          <span>增强失败：</span>
+          <strong style="color: #ef4444;">${failed}</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between;">
+          <span>增强率：</span>
+          <strong>${processed > 0 ? Math.round((successful / processed) * 100) : 0}%</strong>
+        </div>
+      `;
+    }
+  }
+
+  statsContainer.appendChild(basicStats);
+  statsContainer.appendChild(enhancedStats);
+
+  // 成功消息
+  const message = document.createElement('p');
+  message.style.textAlign = 'center';
+  message.style.fontSize = '14px';
+  message.style.color = 'var(--text-dim)';
+  message.style.marginBottom = '20px';
+  
+  let messageText = `✅ 成功导入 ${foldersCount} 个文件夹和 ${bookmarksCount} 个书签`;
+  if (stats.enhancedBookmarksCount > 0) {
+    messageText += `\n🚀 其中 ${stats.enhancedBookmarksCount} 个书签已成功增强（获取了真实标题和图标）`;
+  }
+  message.textContent = messageText;
+
+  // 按钮容器
+  const buttonContainer = document.createElement('div');
+  buttonContainer.style.display = 'flex';
+  buttonContainer.style.justifyContent = 'center';
+
+  // 关闭按钮
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'primary-btn';
+  closeBtn.textContent = '关闭';
+  closeBtn.style.minWidth = '100px';
+
+  buttonContainer.appendChild(closeBtn);
+
+  // 组装DOM结构
+  inner.appendChild(title);
+  inner.appendChild(successIcon);
+  inner.appendChild(statsContainer);
+  inner.appendChild(message);
+  inner.appendChild(buttonContainer);
+
+  panel.appendChild(inner);
+  modal.appendChild(panel);
+
+  // 创建完整的对话框结构
+  const dialog = document.createElement('div');
+  dialog.appendChild(backdrop);
+  dialog.appendChild(modal);
+
+  // 添加到页面
+  document.body.appendChild(dialog);
+  document.body.style.overflow = 'hidden';
+
+  // 清理函数
+  const cleanup = () => {
+    document.body.style.overflow = '';
+    dialog.remove();
+  };
+
+  // 关闭按钮事件
+  closeBtn.addEventListener('click', cleanup);
+
+  // 点击遮罩层关闭
+  backdrop.addEventListener('click', cleanup);
+}
+
+/**
  * 处理书签导入按钮点击事件
  * 检测当前环境，在插件模式下导入书签，在web模式下显示提示
  */
@@ -418,20 +731,27 @@ async function handleImportBookmarks() {
     
     if (!isExtensionMode) {
       // Web模式下不支持书签导入
-      alert('该功能仅插件模式支持，在网页版本中无法使用。');
+      alert('书签导入功能仅在 Chrome 扩展模式下可用。\n\n如需使用此功能，请：\n1. 安装 MyTab Chrome 扩展\n2. 在扩展中打开设置页面\n3. 使用导入功能');
       return;
     }
 
     // 检查Chrome扩展环境
     if (!window.chrome) {
-      toast('✗ Chrome扩展环境不可用');
+      toast('✗ Chrome 扩展环境不可用，请确保在扩展中使用此功能', 3000);
       return;
     }
 
     // 检查书签API是否可用
     if (!chrome.bookmarks) {
-      toast('✗ 书签API不可用，请重新加载扩展');
+      toast('✗ 书签 API 不可用，请重新加载扩展或检查权限设置', 3000);
       console.error('书签API不可用，请检查manifest.json中的权限配置');
+      return;
+    }
+
+    // 显示导入选项对话框
+    const importOptions = await showImportOptionsDialog();
+    if (!importOptions) {
+      // 用户取消了导入
       return;
     }
 
@@ -445,26 +765,15 @@ async function handleImportBookmarks() {
     // 读取浏览器书签
     const bookmarkTree = await chrome.bookmarks.getTree();
     
-    // 转换书签数据
-    const importedData = await convertBookmarksToMyTab(bookmarkTree);
+    // 使用选择的导入模式转换书签数据
+    const importedData = await convertBookmarksToMyTab(bookmarkTree, importOptions);
     
     if (importedData.folders.length === 0) {
       // 恢复按钮状态
       els.importBookmarks.disabled = false;
-      els.importBookmarks.textContent = '导入浏览器书签';
+      els.importBookmarks.textContent = oldText;
       
-      toast('没有找到可导入的书签');
-      return;
-    }
-
-    // 显示导入确认对话框
-    const shouldImport = await showImportConfirmDialog(importedData);
-    if (!shouldImport) {
-      // 恢复按钮状态
-      els.importBookmarks.disabled = false;
-      els.importBookmarks.textContent = '导入浏览器书签';
-      
-      toast('已取消导入');
+      toast('没有找到可导入的书签，请检查浏览器是否有书签数据', 3000);
       return;
     }
 
@@ -476,19 +785,21 @@ async function handleImportBookmarks() {
       
       // 恢复按钮状态
       els.importBookmarks.disabled = false;
-      els.importBookmarks.textContent = '导入浏览器书签';
+      els.importBookmarks.textContent = oldText;
       
-      // 显示成功提示
-      toast('✓ 书签导入成功！共导入 ' + importedData.stats.foldersCount + ' 个文件夹，' + importedData.stats.bookmarksCount + ' 个书签', 3000);
+      // 显示导入结果
+      showImportResultDialog(importedData.stats, importedData.importResult);
+      
     } catch (importError) {
       console.error('执行导入时出错:', importError);
       
       // 恢复按钮状态
       els.importBookmarks.disabled = false;
-      els.importBookmarks.textContent = '导入浏览器书签';
+      els.importBookmarks.textContent = oldText;
       
       // 显示错误提示
-      toast('✗ 导入失败: ' + (importError.message || importError), 3000);
+      const errorMsg = importError.message || importError;
+      toast('✗ 导入过程中发生错误: ' + errorMsg + '\n请检查网络连接或稍后重试', 4000);
     }
     
   } catch (error) {
@@ -499,7 +810,8 @@ async function handleImportBookmarks() {
     els.importBookmarks.textContent = '导入浏览器书签';
     
     // 显示错误提示
-    toast('✗ 导入失败: ' + (error.message || error), 3000);
+    const errorMsg = error.message || error;
+    toast('✗ 书签导入失败: ' + errorMsg + '\n请检查扩展权限和网络连接', 4000);
   }
 }
 
@@ -651,161 +963,243 @@ async function requestWebdavPermissions(url) {
   }
 }
 
-/**
- * 请求书签权限
- * @returns {Promise<boolean>} 是否获得权限
- */
-async function requestBookmarksPermission() {
-  try {
-    // 检查是否已有权限
-    const hasPermission = await chrome.permissions.contains({
-      permissions: ['bookmarks']
-    });
-    
-    if (hasPermission) {
-      return true;
-    }
-    
-    // 请求权限
-    const granted = await chrome.permissions.request({
-      permissions: ['bookmarks']
-    });
-    
-    return granted;
-  } catch (error) {
-    console.error('权限请求失败:', error);
-    return false;
-  }
-}
+
 
 /**
- * 将Chrome书签数据转换为MyTab格式
+ * 将Chrome书签数据转换为MyTab格式（增强版）
+ * 使用 EnhancedBookmarkImporter 自动获取网站标题和图标
  * @param {Array} bookmarkTree - Chrome书签树
+ * @param {Object} options - 导入选项
+ * @param {boolean} options.enhanced - 是否启用增强功能
  * @returns {Promise<Object>} 转换后的数据
  */
-async function convertBookmarksToMyTab(bookmarkTree) {
+async function convertBookmarksToMyTab(bookmarkTree, options = { enhanced: true }) {
   const { generateId } = await import('./storage.js');
+  const { EnhancedBookmarkImporter } = await import('./enhanced-bookmark-importer.js');
+  const { ProgressDialog } = await import('./progress-dialog.js');
   
   const result = {
     folders: [],
     stats: {
       foldersCount: 0,
-      bookmarksCount: 0
-    }
+      bookmarksCount: 0,
+      enhancedBookmarksCount: 0
+    },
+    importResult: null
   };
 
-  /**
-   * 递归转换书签节点
-   * @param {Object} node - Chrome书签节点
-   * @param {string|null} parentId - 父文件夹ID
-   * @returns {Object|null} 转换后的节点
-   */
-  function convertNode(node, parentId = null) {
-    if (node.url) {
-      // 书签节点
-      result.stats.bookmarksCount++;
-      return {
-        id: generateId('b'),
-        title: node.title || '无标题书签',
-        url: node.url,
-        icon: '', // 默认为空，由系统自动获取
-        dateAdded: node.dateAdded || Date.now()
-      };
-    } else if (node.children) {
-      // 文件夹节点
-      const folder = {
-        id: generateId('f'),
-        name: node.title || '无名文件夹',
-        icon: '📁',
-        type: 'folder',
-        parentId: parentId,
-        bookmarks: [],
-        children: []
-      };
+  // 创建进度对话框（仅在增强模式下显示）
+  const progressDialog = options.enhanced ? new ProgressDialog() : null;
+  let importer = null;
 
-      // 处理子节点
-      for (const child of node.children) {
-        const converted = convertNode(child, folder.id);
-        if (converted) {
-          if (converted.url) {
-            // 是书签
-            folder.bookmarks.push(converted);
-          } else {
-            // 是子文件夹
-            folder.children.push(converted);
-          }
-        }
-      }
-
-      // 只有包含书签或子文件夹的文件夹才被保留
-      if (folder.bookmarks.length > 0 || folder.children.length > 0) {
-        result.stats.foldersCount++;
-        return folder;
-      }
+  try {
+    // 从根节点开始转换，通常是 bookmarkTree[0]
+    if (!bookmarkTree || bookmarkTree.length === 0) {
+      return result;
     }
-    
-    return null;
-  }
 
-  // 从根节点开始转换，通常是 bookmarkTree[0]
-  if (bookmarkTree && bookmarkTree.length > 0) {
     const rootNode = bookmarkTree[0];
-    
     console.log('读取到的根书签节点:', rootNode);
     
-    if (rootNode.children) {
-      // 定义一个临时数组来收集所有要导入的文件夹
-      const foldersToImport = [];
+    if (!rootNode.children) {
+      return result;
+    }
+
+    // 第一步：构建文件夹结构（不包含书签内容）
+    const foldersToImport = [];
+    const allBookmarks = []; // 收集所有书签用于批量增强
+    
+    // 处理每一个顶级文件夹
+    for (const child of rootNode.children) {
+      console.log('顶级文件夹/节点:', child.title, child);
       
-      // 处理每一个顶级文件夹
-      for (const child of rootNode.children) {
-        console.log('顶级文件夹/节点:', child.title, child);
+      // 如果是系统文件夹（书签栏或其他书签）
+      if (isSystemBookmarkFolder(child)) {
+        // 创建一个新文件夹，使用系统文件夹名称
+        const systemFolder = {
+          id: generateId('f'),
+          name: child.title,
+          icon: '📁',
+          type: 'folder',
+          parentId: null,
+          bookmarks: [],
+          children: []
+        };
         
-        // 如果是系统文件夹（书签栏或其他书签）
-        if (isSystemBookmarkFolder(child)) {
-          // 创建一个新文件夹，使用系统文件夹名称
-          const systemFolder = {
-            id: generateId('f'),
-            name: child.title,
-            icon: '📁',
-            type: 'folder',
-            parentId: null,
-            bookmarks: [],
-            children: []
-          };
+        // 递归处理该系统文件夹下的所有内容
+        const { bookmarks: folderBookmarks, subFolders } = await processBookmarkFolder(child, systemFolder.id, generateId);
+        
+        // 收集书签用于批量增强
+        console.log(`系统文件夹 ${child.title} 收集到 ${folderBookmarks.length} 个书签`);
+        folderBookmarks.forEach(bookmark => {
+          console.log(`  - ${bookmark.title} (${bookmark.url}) -> 文件夹 ${bookmark.parentFolderId}`);
+        });
+        allBookmarks.push(...folderBookmarks);
+        
+        // 添加子文件夹
+        systemFolder.children = subFolders;
+        
+        // 只有当有内容时才添加该文件夹
+        if (folderBookmarks.length > 0 || subFolders.length > 0) {
+          result.stats.foldersCount++;
+          foldersToImport.push(systemFolder);
           
-          // 处理该系统文件夹下的所有内容
-          if (child.children) {
-            for (const subItem of child.children) {
-              const converted = convertNode(subItem, systemFolder.id);
-              if (converted) {
-                if (converted.url) {
-                  // 是书签
-                  systemFolder.bookmarks.push(converted);
-                } else {
-                  // 是子文件夹
-                  systemFolder.children.push(converted);
-                }
-              }
-            }
-          }
-          
-          // 只有当有内容时才添加该文件夹
-          if (systemFolder.bookmarks.length > 0 || systemFolder.children.length > 0) {
-            result.stats.foldersCount++;
-            foldersToImport.push(systemFolder);
-          }
-        } else {
-          // 非系统文件夹，直接转换
-          const converted = convertNode(child, null);
-          if (converted) {
-            foldersToImport.push(converted);
-          }
+          // 暂时将书签引用存储，稍后会被增强后的书签替换
+          systemFolder._bookmarkRefs = folderBookmarks;
+        }
+      } else {
+        // 非系统文件夹，直接处理
+        const { bookmarks: folderBookmarks, folder: convertedFolder } = await processBookmarkNode(child, null, generateId);
+        
+        if (convertedFolder) {
+          console.log(`非系统文件夹 ${convertedFolder.name} 收集到 ${folderBookmarks.length} 个书签`);
+          folderBookmarks.forEach(bookmark => {
+            console.log(`  - ${bookmark.title} (${bookmark.url}) -> 文件夹 ${bookmark.parentFolderId}`);
+          });
+          allBookmarks.push(...folderBookmarks);
+          foldersToImport.push(convertedFolder);
+          convertedFolder._bookmarkRefs = folderBookmarks;
         }
       }
+    }
+
+    // 更新基础统计
+    result.stats.bookmarksCount = allBookmarks.length;
+    result.folders = foldersToImport;
+
+    // 如果没有书签，直接返回
+    if (allBookmarks.length === 0) {
+      return result;
+    }
+
+    // 第二步：根据选项决定是否使用增强功能
+    if (options.enhanced) {
+      // 增强模式：使用 EnhancedBookmarkImporter 批量增强书签
+      console.log(`开始增强 ${allBookmarks.length} 个书签...`);
       
-      // 将收集到的所有文件夹添加到结果中
-      result.folders = foldersToImport;
+      // 显示进度对话框
+      progressDialog.show(allBookmarks.length, () => {
+        if (importer) {
+          importer.cancel();
+        }
+      });
+
+      // 创建增强导入器
+      importer = new EnhancedBookmarkImporter({
+        concurrency: 8,
+        timeout: 8000,
+        onProgress: (progress) => {
+          // 更新进度对话框，包含时间估算
+          progressDialog.updateProgress(
+            progress.processed || 0,
+            progress.total || allBookmarks.length,
+            progress.currentUrl || '',
+            progress.timing
+          );
+          
+          progressDialog.updateStats({
+            successful: progress.successful || 0,
+            failed: progress.failed || 0,
+            processed: progress.processed || 0,
+            cached: progress.cached || 0,
+            errorsByType: progress.errorsByType,
+            concurrencyAdjustments: progress.concurrencyAdjustments
+          }, progress.timing);
+        },
+        onError: (error) => {
+          console.warn('书签增强过程中出现错误:', error);
+        }
+      });
+
+      // 执行批量增强，传入我们已经处理好的书签数据而不是原始的书签树
+      const enhancementResult = await importer.importBookmarksFromList(allBookmarks);
+      result.importResult = enhancementResult;
+      
+      if (enhancementResult.success) {
+        // 增强成功，更新统计信息
+        result.stats.enhancedBookmarksCount = enhancementResult.stats.successful || 0;
+        
+        // 创建增强书签的映射表（URL -> 增强书签）
+        const enhancedBookmarkMap = new Map();
+        console.log(`创建增强书签映射表，共 ${enhancementResult.bookmarks.length} 个增强书签`);
+        for (const enhancedBookmark of enhancementResult.bookmarks) {
+          if (enhancedBookmark.url) {
+            enhancedBookmarkMap.set(enhancedBookmark.url, enhancedBookmark);
+            console.log(`映射: ${enhancedBookmark.url} -> ${enhancedBookmark.title} (增强=${enhancedBookmark.enhanced})`);
+          }
+        }
+        console.log(`增强书签映射表创建完成，共 ${enhancedBookmarkMap.size} 个条目`);
+        
+        // 第三步：将增强后的书签数据应用到文件夹结构中
+        for (const folder of result.folders) {
+          await applyEnhancedBookmarksToFolder(folder, enhancedBookmarkMap);
+        }
+        
+        // 显示完成状态
+        progressDialog.setCompleted({
+          successful: enhancementResult.stats.successful || 0,
+          failed: enhancementResult.stats.failed || 0,
+          processed: enhancementResult.stats.processed || 0
+        });
+        
+        console.log('书签增强完成:', enhancementResult.stats);
+      } else {
+        // 增强失败，使用原始书签数据
+        console.warn('书签增强失败，使用原始数据:', enhancementResult.error);
+        
+        // 将原始书签应用到文件夹结构
+        for (const folder of result.folders) {
+          await applyOriginalBookmarksToFolder(folder);
+        }
+        
+        progressDialog.setError(enhancementResult.error || '增强过程失败');
+      }
+
+      // 延迟关闭进度对话框，让用户看到结果
+      setTimeout(() => {
+        progressDialog.hide();
+      }, 2000);
+    } else {
+      // 快速模式：直接使用原始书签数据
+      console.log(`快速导入 ${allBookmarks.length} 个书签...`);
+      
+      // 将原始书签应用到文件夹结构
+      for (const folder of result.folders) {
+        await applyOriginalBookmarksToFolder(folder);
+      }
+      
+      console.log('快速导入完成');
+    }
+
+  } catch (error) {
+    console.error('书签转换过程中出现错误:', error);
+    
+    // 显示详细的错误状态（仅在增强模式下）
+    if (progressDialog && progressDialog.visible) {
+      let errorMessage = error.message || String(error);
+      
+      // 根据错误类型提供更友好的错误信息
+      if (errorMessage.includes('网络错误') || errorMessage.includes('Failed to fetch')) {
+        errorMessage = '网络连接失败，请检查网络连接后重试';
+      } else if (errorMessage.includes('超时')) {
+        errorMessage = '请求超时，可能是网络较慢或目标网站响应缓慢';
+      } else if (errorMessage.includes('权限')) {
+        errorMessage = '权限不足，请确保已授予必要的浏览器权限';
+      }
+      
+      progressDialog.setError(errorMessage);
+      
+      // 延长错误显示时间，让用户有足够时间阅读
+      setTimeout(() => {
+        progressDialog.hide();
+      }, 5000);
+    }
+    
+    throw error;
+  } finally {
+    // 清理资源
+    if (importer) {
+      importer.destroy();
     }
   }
 
@@ -831,21 +1225,190 @@ function isSystemBookmarkFolder(node) {
 }
 
 /**
- * 显示导入确认对话框
- * @param {Object} importedData - 转换后的书签数据
- * @returns {Promise<boolean>} 用户是否确认导入
+ * 递归处理书签文件夹，提取所有书签和子文件夹
+ * @param {Object} folderNode - Chrome书签文件夹节点
+ * @param {string} parentId - 父文件夹ID
+ * @param {Function} generateId - ID生成函数
+ * @returns {Promise<Object>} 包含书签数组和子文件夹数组的对象
  */
-async function showImportConfirmDialog(importedData) {
-  const { stats } = importedData;
+async function processBookmarkFolder(folderNode, parentId, generateId) {
+  const bookmarks = [];
+  const subFolders = [];
   
-  const message = 
-    `准备导入以下数据：\n\n` +
-    `文件夹数量：${stats.foldersCount} 个\n` +
-    `书签数量：${stats.bookmarksCount} 个\n\n` +
-    `导入方式：将新数据添加到现有数据之后（不会覆盖现有数据）\n\n` +
-    `是否继续？`;
+  if (!folderNode.children) {
+    return { bookmarks, subFolders };
+  }
   
-  return confirm(message);
+  for (const child of folderNode.children) {
+    if (child.url) {
+      // 是书签
+      bookmarks.push({
+        id: generateId('b'),
+        title: child.title || '无标题书签',
+        url: child.url,
+        dateAdded: child.dateAdded || Date.now(),
+        parentFolderId: parentId
+      });
+    } else if (child.children) {
+      // 是子文件夹
+      const subFolder = {
+        id: generateId('f'),
+        name: child.title || '无名文件夹',
+        icon: '📁',
+        type: 'folder',
+        parentId: parentId,
+        bookmarks: [],
+        children: []
+      };
+      
+      // 递归处理子文件夹
+      const { bookmarks: subBookmarks, subFolders: subSubFolders } = await processBookmarkFolder(child, subFolder.id, generateId);
+      
+      // 收集所有书签（包括子文件夹中的）
+      bookmarks.push(...subBookmarks);
+      
+      // 设置子文件夹的子文件夹
+      subFolder.children = subSubFolders;
+      subFolder._bookmarkRefs = subBookmarks.filter(b => b.parentFolderId === subFolder.id);
+      
+      // 只有包含内容的文件夹才被保留
+      if (subBookmarks.length > 0 || subSubFolders.length > 0) {
+        subFolders.push(subFolder);
+      }
+    }
+  }
+  
+  return { bookmarks, subFolders };
+}
+
+/**
+ * 处理单个书签节点（可能是文件夹或书签）
+ * @param {Object} node - Chrome书签节点
+ * @param {string|null} parentId - 父文件夹ID
+ * @param {Function} generateId - ID生成函数
+ * @returns {Promise<Object>} 包含书签数组和文件夹对象的结果
+ */
+async function processBookmarkNode(node, parentId, generateId) {
+  if (node.url) {
+    // 是书签
+    const bookmark = {
+      id: generateId('b'),
+      title: node.title || '无标题书签',
+      url: node.url,
+      dateAdded: node.dateAdded || Date.now(),
+      parentFolderId: parentId
+    };
+    return { bookmarks: [bookmark], folder: null };
+  } else if (node.children) {
+    // 是文件夹
+    const folder = {
+      id: generateId('f'),
+      name: node.title || '无名文件夹',
+      icon: '📁',
+      type: 'folder',
+      parentId: parentId,
+      bookmarks: [],
+      children: []
+    };
+    
+    // 递归处理文件夹内容
+    const { bookmarks, subFolders } = await processBookmarkFolder(node, folder.id, generateId);
+    
+    folder.children = subFolders;
+    
+    // 只有包含内容的文件夹才被保留
+    if (bookmarks.length > 0 || subFolders.length > 0) {
+      return { bookmarks, folder };
+    }
+  }
+  
+  return { bookmarks: [], folder: null };
+}
+
+/**
+ * 将增强后的书签数据应用到文件夹结构中
+ * @param {Object} folder - 文件夹对象
+ * @param {Map} enhancedBookmarkMap - 增强书签映射表（URL -> 增强书签）
+ */
+async function applyEnhancedBookmarksToFolder(folder, enhancedBookmarkMap) {
+  console.log(`处理文件夹: ${folder.name} (ID: ${folder.id})`);
+  
+  // 处理当前文件夹的书签
+  if (folder._bookmarkRefs) {
+    console.log(`文件夹 ${folder.name} 有 ${folder._bookmarkRefs.length} 个书签引用`);
+    
+    const filteredBookmarks = folder._bookmarkRefs.filter(bookmark => {
+      const matches = bookmark.parentFolderId === folder.id;
+      console.log(`书签 ${bookmark.title} (${bookmark.url}) parentFolderId=${bookmark.parentFolderId}, folder.id=${folder.id}, 匹配=${matches}`);
+      return matches;
+    });
+    
+    console.log(`过滤后有 ${filteredBookmarks.length} 个匹配的书签`);
+    
+    folder.bookmarks = filteredBookmarks.map(originalBookmark => {
+      const enhanced = enhancedBookmarkMap.get(originalBookmark.url);
+      if (enhanced) {
+        console.log(`找到增强数据: ${originalBookmark.url} -> ${enhanced.title}`);
+        // 使用增强后的数据，但保留原始的ID和文件夹关联
+        const finalTitle = enhanced.title || enhanced.originalTitle || originalBookmark.title || '无标题书签';
+        return {
+          ...enhanced,
+          id: originalBookmark.id,
+          parentFolderId: originalBookmark.parentFolderId,
+          dateAdded: originalBookmark.dateAdded,
+          // 确保标题不为空，如果增强后的标题为空，使用原始标题
+          title: finalTitle
+        };
+      } else {
+        console.log(`未找到增强数据，使用原始书签: ${originalBookmark.url}`);
+        // 如果没有增强数据，使用原始书签
+        return originalBookmark;
+      }
+    });
+    
+    console.log(`文件夹 ${folder.name} 最终有 ${folder.bookmarks.length} 个书签`);
+    
+    // 清理临时引用
+    delete folder._bookmarkRefs;
+  }
+  
+  // 递归处理子文件夹
+  if (folder.children) {
+    for (const subFolder of folder.children) {
+      await applyEnhancedBookmarksToFolder(subFolder, enhancedBookmarkMap);
+    }
+  }
+}
+
+/**
+ * 将原始书签数据应用到文件夹结构中（增强失败时的备选方案）
+ * @param {Object} folder - 文件夹对象
+ */
+async function applyOriginalBookmarksToFolder(folder) {
+  console.log(`[快速模式] 处理文件夹: ${folder.name} (ID: ${folder.id})`);
+  
+  // 处理当前文件夹的书签
+  if (folder._bookmarkRefs) {
+    console.log(`[快速模式] 文件夹 ${folder.name} 有 ${folder._bookmarkRefs.length} 个书签引用`);
+    
+    const filteredBookmarks = folder._bookmarkRefs.filter(bookmark => {
+      const matches = bookmark.parentFolderId === folder.id;
+      console.log(`[快速模式] 书签 ${bookmark.title} (${bookmark.url}) parentFolderId=${bookmark.parentFolderId}, folder.id=${folder.id}, 匹配=${matches}`);
+      return matches;
+    });
+    
+    folder.bookmarks = filteredBookmarks;
+    console.log(`[快速模式] 文件夹 ${folder.name} 最终有 ${folder.bookmarks.length} 个书签`);
+    
+    delete folder._bookmarkRefs;
+  }
+  
+  // 递归处理子文件夹
+  if (folder.children) {
+    for (const subFolder of folder.children) {
+      await applyOriginalBookmarksToFolder(subFolder);
+    }
+  }
 }
 
 /**

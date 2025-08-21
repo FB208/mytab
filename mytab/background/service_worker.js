@@ -297,6 +297,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         sendResponse({ ok: true, result });
         return;
       }
+      
+      // 批量增强书签信息
+      if (msg?.type === 'bookmark:enhance-batch') {
+        const { urls } = msg;
+        const results = await enhanceBatchBookmarks(urls);
+        sendResponse({ ok: true, results });
+        return;
+      }
     } catch (e) {
       // 统一错误处理
       sendResponse({ ok: false, error: String(e?.message || e) });
@@ -311,64 +319,223 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
 /**
  * 后台收集网站favicon图标的完整流程
- * 使用统一的图标获取逻辑，支持图标验证
+ * 使用统一的图标获取逻辑，支持图标验证和完整错误处理
  * 
  * @param {string} pageUrl - 目标网站的完整URL
  * @returns {Promise<string[]>} - 返回图标URL数组，按优先级排序
  */
 async function collectFaviconsInBg(pageUrl) {
-  // 图标验证函数：检查图标是否有效
+  const TIMEOUT_MS = 8000; // 8秒超时
+  
+  // 增强的图标验证函数：检查图标是否有效，包含完整错误处理
   const validateIcon = async (href) => {
     try {
-      const res = await fetch(href, { method: 'HEAD' });
+      // 创建超时控制器
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        controller.abort();
+      }, TIMEOUT_MS);
+
+      const res = await fetch(href, { 
+        method: 'HEAD',
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+      });
+
+      clearTimeout(timeoutId);
+      
+      // HTTP错误处理
+      if (!res.ok) {
+        const errorType = res.status >= 500 ? '服务器错误' : 
+                         res.status >= 400 ? '客户端错误' : '未知错误';
+        console.warn(`图标验证失败 - ${errorType} (${res.status}):`, href);
+        return null;
+      }
+      
       const contentType = res.headers.get('content-type') || '';
       
-      // 验证响应状态和Content-Type
-      if (res.ok && /image\//.test(contentType)) {
+      // 验证Content-Type是否为图片类型
+      if (/image\//.test(contentType)) {
+        // 检查图片大小，避免过大的图片
+        const contentLength = res.headers.get('content-length');
+        if (contentLength && parseInt(contentLength) > 1024 * 1024) { // 1MB限制
+          console.warn('图标文件过大，跳过:', href, `${Math.round(parseInt(contentLength) / 1024)}KB`);
+          return null;
+        }
+        
         return href;
+      } else {
+        console.warn('图标Content-Type验证失败:', href, contentType);
+        return null;
       }
+      
     } catch (e) {
-      // 请求失败，忽略此图标
+      // 详细的错误分类和日志记录
+      let errorType = '未知错误';
+      let errorMessage = e.message || String(e);
+      
+      if (e.name === 'AbortError') {
+        errorType = '请求超时';
+        errorMessage = `图标验证超时 (${TIMEOUT_MS}ms)`;
+      } else if (e.message.includes('Failed to fetch') || e.message.includes('NetworkError')) {
+        errorType = '网络错误';
+        errorMessage = '无法连接到图标服务器';
+      } else if (e.message.includes('CORS')) {
+        errorType = 'CORS错误';
+        errorMessage = '图标跨域请求被阻止';
+      }
+      
+      console.warn(`图标验证失败 - ${errorType}:`, href, errorMessage);
+      return null;
     }
-    return null;
   };
 
-  // 使用统一的图标收集逻辑，并提供验证函数
-  return await collectFavicons(pageUrl, fetch, validateIcon);
+  try {
+    // 使用统一的图标收集逻辑，并提供增强的验证函数
+    const icons = await collectFavicons(pageUrl, fetch, validateIcon);
+    
+    // 如果没有找到有效图标，记录详细信息
+    if (!icons || icons.length === 0) {
+      console.info('未找到有效的favicon图标:', pageUrl);
+    } else {
+      console.info(`成功收集到 ${icons.length} 个图标:`, pageUrl);
+    }
+    
+    return icons || [];
+    
+  } catch (e) {
+    // 图标收集过程的整体错误处理
+    console.warn('图标收集过程失败:', pageUrl, e.message || String(e));
+    return [];
+  }
 }
 
 /**
  * 获取网站标题的后台实现
- * 通过HTTP请求获取页面<title>标签内容
+ * 通过HTTP请求获取页面<title>标签内容，包含完整的错误处理
  * 
  * @param {string} url - 目标网站URL
  * @returns {Promise<string>} - 返回网站标题，失败时返回空字符串
  */
 async function fetchTitle(url) {
+  const TIMEOUT_MS = 8000; // 8秒超时
+  
+  console.log(`🔍 [标题获取] 开始获取标题:`, url);
+  
   try {
-    const response = await fetch(url);
+    // 创建超时控制器
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+    }, TIMEOUT_MS);
+
+    console.log(`📡 [标题获取] 发送HTTP请求:`, url);
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+      }
+    });
+
+    clearTimeout(timeoutId);
     
-    // 确保响应成功
+    console.log(`📊 [标题获取] HTTP响应状态:`, response.status, response.statusText, url);
+    
+    // HTTP错误处理（4xx/5xx状态码）
     if (!response.ok) {
-      return '';
+      const errorType = response.status >= 500 ? '服务器错误' : 
+                       response.status >= 400 ? '客户端错误' : '未知错误';
+      const errorMsg = `获取网站标题失败 - ${errorType} (${response.status})`;
+      console.warn(`❌ [标题获取] ${errorMsg}:`, url);
+      return null;
     }
     
+    // 检查Content-Type，确保是HTML内容
+    const contentType = response.headers.get('content-type') || '';
+    console.log(`📄 [标题获取] Content-Type:`, contentType, url);
+    
+    if (!contentType.includes('text/html') && !contentType.includes('application/xhtml')) {
+      const errorMsg = '获取网站标题失败 - 非HTML内容';
+      console.warn(`❌ [标题获取] ${errorMsg}:`, url, contentType);
+      return null;
+    }
+    
+    console.log(`📖 [标题获取] 开始解析HTML内容:`, url);
     const html = await response.text();
+    const htmlLength = html.length;
+    console.log(`📖 [标题获取] HTML内容长度: ${htmlLength} 字符:`, url);
     
-    // 使用正则表达式提取<title>标签内容
-    // 支持各种大小写和空格变体
-    const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
-    
-    if (titleMatch && titleMatch[1]) {
-      // 清理标题内容：去除前后空格和特殊字符
-      return titleMatch[1].trim();
+    // HTML解析错误处理
+    try {
+      // 使用正则表达式提取<title>标签内容
+      // 支持各种大小写和空格变体，以及多行标题
+      const titleMatch = html.match(/<title[^>]*>\s*([^<]*?)\s*<\/title>/is);
+      
+      console.log(`🔍 [标题获取] title标签匹配结果:`, titleMatch ? `找到: "${titleMatch[1]}"` : '未找到', url);
+      
+      if (titleMatch && titleMatch[1]) {
+        // 清理标题内容：去除前后空格、换行符和多余的空白字符
+        const rawTitle = titleMatch[1];
+        const cleanTitle = rawTitle
+          .replace(/\s+/g, ' ')  // 将多个空白字符替换为单个空格
+          .trim();
+        
+        console.log(`🧹 [标题获取] 标题清理: "${rawTitle}" -> "${cleanTitle}":`, url);
+        
+        if (cleanTitle.length > 0) {
+          console.log(`✅ [标题获取] 成功获取标题: "${cleanTitle}":`, url);
+          return cleanTitle;
+        } else {
+          console.warn(`⚠️ [标题获取] 标题为空字符串:`, url);
+          return null;
+        }
+      }
+      
+      // 如果没有找到title标签，尝试查找其他可能的标题元素
+      console.log(`🔍 [标题获取] 尝试查找H1标签:`, url);
+      const h1Match = html.match(/<h1[^>]*>\s*([^<]*?)\s*<\/h1>/is);
+      
+      console.log(`🔍 [标题获取] H1标签匹配结果:`, h1Match ? `找到: "${h1Match[1]}"` : '未找到', url);
+      
+      if (h1Match && h1Match[1]) {
+        const h1Title = h1Match[1].replace(/\s+/g, ' ').trim();
+        if (h1Title.length > 0) {
+          console.log(`✅ [标题获取] 使用H1标签作为标题: "${h1Title}":`, url);
+          return h1Title;
+        }
+      }
+      
+      console.warn(`❌ [标题获取] 未找到有效的标题内容:`, url);
+      return null;
+    } catch (parseError) {
+      const errorMsg = `HTML解析错误: ${parseError.message}`;
+      console.warn(`❌ [标题获取] ${errorMsg}:`, url, parseError);
+      return null;
     }
     
-    return '';
   } catch (e) {
-    // 网络错误、跨域问题等情况下返回空
-    console.warn('获取网站标题失败:', url, e);
-    return '';
+    // 详细的错误分类和日志记录
+    let errorType = '未知错误';
+    let errorMessage = e.message || String(e);
+    
+    if (e.name === 'AbortError') {
+      errorType = '请求超时';
+      errorMessage = `请求超时 (${TIMEOUT_MS}ms)`;
+    } else if (e.message.includes('Failed to fetch') || e.message.includes('NetworkError')) {
+      errorType = '网络错误';
+      errorMessage = '无法连接到服务器';
+    } else if (e.message.includes('CORS')) {
+      errorType = 'CORS错误';
+      errorMessage = '跨域请求被阻止';
+    } else if (e.message.includes('SSL') || e.message.includes('certificate')) {
+      errorType = 'SSL错误';
+      errorMessage = 'SSL证书验证失败';
+    }
+    
+    console.warn(`❌ [标题获取] ${errorType}: ${errorMessage}:`, url, e);
+    return null;
   }
 }
 
@@ -406,6 +573,146 @@ async function syncFromCloud(fileName) {
     saveData: (data) => chrome.storage.local.set({ data }),
     notifyDataChanged: () => chrome.runtime.sendMessage({ type: 'data:changed' }).catch(() => {})
   });
+}
+
+/**
+ * 批量增强书签信息
+ * 集成现有的fetchTitle和collectFavicons功能，为多个URL获取增强信息
+ * 包含完整的错误处理和超时控制
+ * 
+ * @param {string[]} urls - 需要增强的URL数组
+ * @returns {Promise<Object[]>} 增强结果数组，每个元素包含url、title、icons等信息
+ */
+async function enhanceBatchBookmarks(urls) {
+  if (!Array.isArray(urls) || urls.length === 0) {
+    return [];
+  }
+
+  const results = [];
+  const BATCH_TIMEOUT = 30000; // 整个批次30秒超时
+  const startTime = Date.now();
+  
+  console.info(`开始批量增强 ${urls.length} 个书签`);
+  
+  // 为每个URL获取增强信息
+  for (let i = 0; i < urls.length; i++) {
+    const url = urls[i];
+    
+    // 检查整体超时
+    if (Date.now() - startTime > BATCH_TIMEOUT) {
+      console.warn('批量增强超时，停止处理剩余URL');
+      break;
+    }
+    
+    try {
+      const result = {
+        url,
+        success: false,
+        title: '',
+        icons: [],
+        error: null,
+        errorType: null
+      };
+
+      console.log(`🚀 [批量增强] 开始处理书签 [${i + 1}/${urls.length}]:`, url);
+
+      // 并行获取标题和图标信息，设置合理的超时时间
+      const [titleResult, iconsResult] = await Promise.allSettled([
+        Promise.race([
+          fetchTitle(url),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('标题获取超时')), 8000))
+        ]),
+        Promise.race([
+          collectFaviconsInBg(url),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('图标获取超时')), 8000))
+        ])
+      ]);
+
+      console.log(`📊 [批量增强] 获取结果 [${i + 1}/${urls.length}]:`, {
+        url,
+        titleStatus: titleResult.status,
+        titleValue: titleResult.status === 'fulfilled' ? titleResult.value : null,
+        titleError: titleResult.status === 'rejected' ? titleResult.reason?.message : null,
+        iconsStatus: iconsResult.status,
+        iconsCount: iconsResult.status === 'fulfilled' ? iconsResult.value?.length : 0
+      });
+
+      // 处理标题获取结果
+      if (titleResult.status === 'fulfilled' && titleResult.value) {
+        result.title = titleResult.value;
+        console.log(`✅ [批量增强] 标题获取成功 [${i + 1}/${urls.length}]: "${result.title}":`, url);
+      } else if (titleResult.status === 'rejected') {
+        const error = titleResult.reason;
+        result.titleError = error.message || String(error);
+        console.warn(`❌ [批量增强] 标题获取失败 [${i + 1}/${urls.length}]: ${result.titleError}:`, url, error);
+      } else {
+        console.warn(`⚠️ [批量增强] 标题获取返回空值 [${i + 1}/${urls.length}]:`, url);
+        result.titleError = '标题获取返回空值';
+      }
+
+      // 处理图标获取结果
+      if (iconsResult.status === 'fulfilled' && Array.isArray(iconsResult.value)) {
+        result.icons = iconsResult.value;
+      } else if (iconsResult.status === 'rejected') {
+        const error = iconsResult.reason;
+        result.iconError = error.message || String(error);
+        console.warn(`图标获取失败 [${i + 1}/${urls.length}]:`, url, result.iconError);
+      }
+
+      // 如果至少获取到标题或图标之一，则认为成功
+      if (result.title || result.icons.length > 0) {
+        result.success = true;
+      } else {
+        // 记录失败原因
+        const errors = [];
+        if (result.titleError) errors.push(`标题: ${result.titleError}`);
+        if (result.iconError) errors.push(`图标: ${result.iconError}`);
+        result.error = errors.length > 0 ? errors.join('; ') : '未知错误';
+        
+        // 错误分类
+        if (result.error.includes('超时')) {
+          result.errorType = 'timeout';
+        } else if (result.error.includes('网络') || result.error.includes('Failed to fetch')) {
+          result.errorType = 'network';
+        } else if (result.error.includes('CORS')) {
+          result.errorType = 'cors';
+        } else {
+          result.errorType = 'other';
+        }
+      }
+
+      results.push(result);
+      
+      // 每处理10个URL记录一次进度
+      if ((i + 1) % 10 === 0 || i === urls.length - 1) {
+        const successCount = results.filter(r => r.success).length;
+        console.info(`批量增强进度: ${i + 1}/${urls.length}, 成功: ${successCount}`);
+      }
+      
+    } catch (error) {
+      // 单个URL处理的意外错误
+      const errorMessage = error.message || String(error);
+      console.error(`URL处理异常 [${i + 1}/${urls.length}]:`, url, errorMessage);
+      
+      results.push({
+        url,
+        success: false,
+        title: '',
+        icons: [],
+        error: `处理异常: ${errorMessage}`,
+        errorType: 'exception'
+      });
+    }
+  }
+
+  // 统计最终结果
+  const successCount = results.filter(r => r.success).length;
+  const failedCount = results.length - successCount;
+  const duration = Math.round((Date.now() - startTime) / 1000);
+  
+  console.info(`批量增强完成: 总计 ${results.length}, 成功 ${successCount}, 失败 ${failedCount}, 用时 ${duration}秒`);
+
+  return results;
 }
 
 

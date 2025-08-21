@@ -1331,8 +1331,9 @@ async function fetchTitle(url) {
       type: 'title:fetch',
       url
     });
-    if (res?.title) {
-      modal.name.value = res.title;
+    // 检查返回的标题是否有效（不为null且不为空字符串）
+    if (res?.title && res.title.trim()) {
+      modal.name.value = res.title.trim();
       return;
     }
   } catch (e) {}
