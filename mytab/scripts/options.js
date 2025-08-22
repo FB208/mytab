@@ -143,6 +143,14 @@ function bind() {
       
       // 保存到存储
       await writeSettings(next);
+      
+      // 清除WebDAV验证缓存，因为配置可能已更改
+      try {
+        await chrome.runtime.sendMessage({ type: 'webdav:clear-cache' });
+      } catch (e) {
+        // 忽略清除缓存的错误
+      }
+      
       toast('已保存');
       
     } catch (error) {

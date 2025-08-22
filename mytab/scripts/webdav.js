@@ -34,6 +34,9 @@ class WebDAVLogger {
  */
 
 export class WebDAVClient {
+  // 静态验证缓存，跨实例共享
+  static _globalValidationCache = new Map();
+  
   /**
    * 构造函数 - 初始化 WebDAV 客户端
    * @param {Object} config - 配置对象
@@ -47,6 +50,72 @@ export class WebDAVClient {
     this.username = config?.username || '';
     this.password = config?.password || '';
     this.basePath = ''; // 基础路径，暂未使用
+    
+    // 验证缓存：使用全局缓存
+    this._configHash = this._getConfigHash();
+  }
+  
+  /**
+   * 清除所有WebDAV验证缓存（静态方法）
+   */
+  static clearAllValidationCache() {
+    WebDAVClient._globalValidationCache.clear();
+    console.log('🧹 所有WebDAV验证缓存已清除');
+  }
+  
+  /**
+   * 生成配置哈希值，用于检测配置变化
+   * @returns {string} 配置的哈希值
+   */
+  _getConfigHash() {
+    return btoa(`${this.url}:${this.username}:${this.password}`);
+  }
+  
+  /**
+   * 检查验证缓存是否有效
+   * @returns {boolean} 如果缓存有效返回true
+   */
+  _isValidationCacheValid() {
+    const cache = WebDAVClient._globalValidationCache.get(this._configHash);
+    if (!cache) return false;
+    
+    // 检查缓存是否过期（15分钟）
+    const cacheAge = Date.now() - cache.timestamp;
+    if (cacheAge > 15 * 60 * 1000) {
+      WebDAVClient._globalValidationCache.delete(this._configHash);
+      return false;
+    }
+    
+    return true;
+  }
+  
+  /**
+   * 获取验证缓存结果
+   * @returns {Object|null} 缓存的验证结果
+   */
+  _getValidationCache() {
+    const cache = WebDAVClient._globalValidationCache.get(this._configHash);
+    return cache ? cache.result : null;
+  }
+  
+  /**
+   * 设置验证缓存
+   * @param {Object} result - 验证结果
+   */
+  _setValidationCache(result) {
+    WebDAVClient._globalValidationCache.set(this._configHash, {
+      result: { ...result },
+      timestamp: Date.now()
+    });
+  }
+  
+  /**
+   * 清除验证缓存
+   * 当配置变化时应该调用此方法
+   */
+  clearValidationCache() {
+    WebDAVClient._globalValidationCache.delete(this._configHash);
+    console.log('🧹 WebDAV 验证缓存已清除');
   }
 
   /**
@@ -75,7 +144,13 @@ export class WebDAVClient {
    * @param {boolean} testWrite - 是否测试写入权限
    * @returns {Promise<Object>} 验证结果 {success: boolean, error?: string, canWrite?: boolean}
    */
-  async ensureBase(testWrite = false) {
+  async ensureBase(testWrite = false, forceValidation = false) {
+    // 检查缓存是否有效，除非强制验证
+    if (!forceValidation && this._isValidationCacheValid()) {
+      console.log('🚀 WebDAV 使用验证缓存，跳过重复验证');
+      return this._getValidationCache();
+    }
+    
     const timer = WebDAVLogger.time('WebDAV验证');
     
     try {
@@ -159,12 +234,22 @@ export class WebDAVClient {
         canWrite = await this.probeWrite();
       }
       
-      timer({ success: true, canWrite });
-      return { success: true, canWrite };
+      const result = { success: true, canWrite };
+      timer(result);
+      
+      // 缓存验证结果
+      this._setValidationCache(result);
+      
+      return result;
       
     } catch (e) {
       timer(null, e);
-      return { success: false, error: e.message };
+      const errorResult = { success: false, error: e.message };
+      
+      // 验证失败时清除缓存
+      this.clearValidationCache();
+      
+      return errorResult;
     }
   }
 
@@ -174,7 +259,7 @@ export class WebDAVClient {
    * @returns {Promise<Object>} 测试结果
    */
   async testAuthentication() {
-    return this.ensureBase(true);  // 包含写入权限测试
+    return this.ensureBase(true, true);  // 包含写入权限测试，强制验证
   }
 
   /**

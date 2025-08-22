@@ -296,6 +296,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         sendResponse({ ok: true, results });
         return;
       }
+      
+      // 清除WebDAV验证缓存
+      if (msg?.type === 'webdav:clear-cache') {
+        WebDAVClient.clearAllValidationCache();
+        sendResponse({ ok: true });
+        return;
+      }
     } catch (e) {
       // 统一错误处理
       sendResponse({ ok: false, error: String(e?.message || e) });
