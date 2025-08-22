@@ -420,122 +420,29 @@ async function collectFaviconsInBg(pageUrl) {
  * @returns {Promise<string>} - 返回网站标题，失败时返回空字符串
  */
 async function fetchTitle(url) {
-  const TIMEOUT_MS = 8000; // 8秒超时
-  
-  console.log(`🔍 [标题获取] 开始获取标题:`, url);
-  
   try {
-    // 创建超时控制器
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => {
-      controller.abort();
-    }, TIMEOUT_MS);
-
-    console.log(`📡 [标题获取] 发送HTTP请求:`, url);
-    const response = await fetch(url, {
-      signal: controller.signal,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-      }
-    });
-
-    clearTimeout(timeoutId);
+    const urlObj = new URL(url);
+    const hostname = urlObj.hostname;
     
-    console.log(`📊 [标题获取] HTTP响应状态:`, response.status, response.statusText, url);
-    
-    // HTTP错误处理（4xx/5xx状态码）
-    if (!response.ok) {
-      const errorType = response.status >= 500 ? '服务器错误' : 
-                       response.status >= 400 ? '客户端错误' : '未知错误';
-      const errorMsg = `获取网站标题失败 - ${errorType} (${response.status})`;
-      console.warn(`❌ [标题获取] ${errorMsg}:`, url);
-      return null;
+    // 如果是IP地址，返回 IP:端口 格式
+    if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname)) {
+      return urlObj.port ? `${hostname}:${urlObj.port}` : hostname;
     }
     
-    // 检查Content-Type，确保是HTML内容
-    const contentType = response.headers.get('content-type') || '';
-    console.log(`📄 [标题获取] Content-Type:`, contentType, url);
+    // 去掉www前缀
+    let domain = hostname.replace(/^www\./, '');
     
-    if (!contentType.includes('text/html') && !contentType.includes('application/xhtml')) {
-      const errorMsg = '获取网站标题失败 - 非HTML内容';
-      console.warn(`❌ [标题获取] ${errorMsg}:`, url, contentType);
-      return null;
+    // 提取域名主体：去掉最后的后缀部分
+    const parts = domain.split('.');
+    if (parts.length >= 2) {
+      return parts[0]; // 只返回第一部分
     }
     
-    console.log(`📖 [标题获取] 开始解析HTML内容:`, url);
-    const html = await response.text();
-    const htmlLength = html.length;
-    console.log(`📖 [标题获取] HTML内容长度: ${htmlLength} 字符:`, url);
-    
-    // HTML解析错误处理
-    try {
-      // 使用正则表达式提取<title>标签内容
-      // 支持各种大小写和空格变体，以及多行标题
-      const titleMatch = html.match(/<title[^>]*>\s*([^<]*?)\s*<\/title>/is);
-      
-      console.log(`🔍 [标题获取] title标签匹配结果:`, titleMatch ? `找到: "${titleMatch[1]}"` : '未找到', url);
-      
-      if (titleMatch && titleMatch[1]) {
-        // 清理标题内容：去除前后空格、换行符和多余的空白字符
-        const rawTitle = titleMatch[1];
-        const cleanTitle = rawTitle
-          .replace(/\s+/g, ' ')  // 将多个空白字符替换为单个空格
-          .trim();
-        
-        console.log(`🧹 [标题获取] 标题清理: "${rawTitle}" -> "${cleanTitle}":`, url);
-        
-        if (cleanTitle.length > 0) {
-          console.log(`✅ [标题获取] 成功获取标题: "${cleanTitle}":`, url);
-          return cleanTitle;
-        } else {
-          console.warn(`⚠️ [标题获取] 标题为空字符串:`, url);
-          return null;
-        }
-      }
-      
-      // 如果没有找到title标签，尝试查找其他可能的标题元素
-      console.log(`🔍 [标题获取] 尝试查找H1标签:`, url);
-      const h1Match = html.match(/<h1[^>]*>\s*([^<]*?)\s*<\/h1>/is);
-      
-      console.log(`🔍 [标题获取] H1标签匹配结果:`, h1Match ? `找到: "${h1Match[1]}"` : '未找到', url);
-      
-      if (h1Match && h1Match[1]) {
-        const h1Title = h1Match[1].replace(/\s+/g, ' ').trim();
-        if (h1Title.length > 0) {
-          console.log(`✅ [标题获取] 使用H1标签作为标题: "${h1Title}":`, url);
-          return h1Title;
-        }
-      }
-      
-      console.warn(`❌ [标题获取] 未找到有效的标题内容:`, url);
-      return null;
-    } catch (parseError) {
-      const errorMsg = `HTML解析错误: ${parseError.message}`;
-      console.warn(`❌ [标题获取] ${errorMsg}:`, url, parseError);
-      return null;
-    }
-    
-  } catch (e) {
-    // 详细的错误分类和日志记录
-    let errorType = '未知错误';
-    let errorMessage = e.message || String(e);
-    
-    if (e.name === 'AbortError') {
-      errorType = '请求超时';
-      errorMessage = `请求超时 (${TIMEOUT_MS}ms)`;
-    } else if (e.message.includes('Failed to fetch') || e.message.includes('NetworkError')) {
-      errorType = '网络错误';
-      errorMessage = '无法连接到服务器';
-    } else if (e.message.includes('CORS')) {
-      errorType = 'CORS错误';
-      errorMessage = '跨域请求被阻止';
-    } else if (e.message.includes('SSL') || e.message.includes('certificate')) {
-      errorType = 'SSL错误';
-      errorMessage = 'SSL证书验证失败';
-    }
-    
-    console.warn(`❌ [标题获取] ${errorType}: ${errorMessage}:`, url, e);
-    return null;
+    // 提取不到就返回hostname
+    return hostname;
+  } catch (error) {
+    // 解析失败返回原始URL
+    return url;
   }
 }
 

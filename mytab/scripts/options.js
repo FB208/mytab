@@ -1086,8 +1086,8 @@ async function convertBookmarksToMyTab(bookmarkTree, options = { enhanced: true 
 
       // 创建增强导入器
       importer = new EnhancedBookmarkImporter({
-        concurrency: 8,
-        timeout: 8000,
+        concurrency: 6,
+        timeout: 5000,
         onProgress: (progress) => {
           // 更新进度对话框，包含时间估算
           progressDialog.updateProgress(

@@ -369,7 +369,7 @@ export class EnhancedBookmarkImporter {
     // 尝试获取真实标题
     console.log(`🔍 [书签增强] 开始获取标题: "${bookmark.title}" -> ${bookmark.url}`);
     try {
-      const titleResult = await this._fetchTitleWithTimeout(bookmark.url);
+      const titleResult = await this._fetchTitleViaMessage(bookmark.url);
       console.log(`📝 [书签增强] 标题获取结果:`, {
         url: bookmark.url,
         originalTitle: bookmark.title,
@@ -434,7 +434,7 @@ export class EnhancedBookmarkImporter {
     try {
       // 并行获取标题和图标，提高效率
       const [titleResult, iconsResult] = await Promise.allSettled([
-        this._fetchTitleWithTimeout(url),
+        this._fetchTitleViaMessage(url),
         this._fetchFaviconWithTimeout(url)
       ]);
 
@@ -739,60 +739,51 @@ export class EnhancedBookmarkImporter {
 
 
 
+
   /**
-   * 带超时控制的标题获取方法
+   * 通过消息机制获取网站标题
    * @param {string} url - 网站URL
    * @returns {Promise<string>} 网站标题
    * @private
    */
-  async _fetchTitleWithTimeout(url) {
-    const isExtensionMode = !window.__MYTAB_USE_PROXY__;
-    
-    console.log(`🔧 [标题获取] 模式检测: ${isExtensionMode ? '扩展模式' : 'Web模式'}:`, url);
-    
-    if (isExtensionMode && window.chrome && chrome.runtime) {
-      // 扩展模式：使用后台服务
-      console.log(`📡 [标题获取] 使用后台服务获取标题:`, url);
-      
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('标题获取超时')), this.timeout);
-      });
-
-      try {
-        const titlePromise = chrome.runtime.sendMessage({ type: 'title:fetch', url });
-        const result = await Promise.race([titlePromise, timeoutPromise]);
-        
-        console.log(`📨 [标题获取] 后台服务响应:`, {
-          url,
-          result,
-          hasTitle: !!(result?.title),
-          titleLength: result?.title?.length || 0
+  async _fetchTitleViaMessage(url) {
+    try {
+      if (chrome?.runtime?.sendMessage) {
+        const response = await chrome.runtime.sendMessage({ 
+          type: 'title:fetch', 
+          url: url 
         });
-        
-        // 确保返回的标题不为空字符串，如果为空则返回null表示获取失败
-        const title = result?.title;
-        const finalTitle = (title && title.trim()) ? title.trim() : null;
-        
-        console.log(`🎯 [标题获取] 最终结果: "${finalTitle}":`, url);
-        return finalTitle;
-      } catch (error) {
-        console.warn(`❌ [标题获取] 后台服务调用失败: ${error.message}:`, url, error);
-        throw error;
+        return response?.title || '';
       }
-    } else {
-      // Web模式：直接请求
-      console.log(`🌐 [标题获取] 使用直接请求获取标题:`, url);
-      
+      // 如果没有chrome runtime API，使用简单的域名提取作为fallback
       try {
-        const title = await this._fetchTitleDirectly(url);
-        const finalTitle = (title && title.trim()) ? title.trim() : null;
+        const urlObj = new URL(url);
+        const hostname = urlObj.hostname;
         
-        console.log(`🎯 [标题获取] Web模式最终结果: "${finalTitle}":`, url);
-        return finalTitle;
+        // 如果是IP地址，返回 IP:端口 格式
+        if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname)) {
+          return urlObj.port ? `${hostname}:${urlObj.port}` : hostname;
+        }
+        
+        // 去掉www前缀
+        let domain = hostname.replace(/^www\./, '');
+        
+        // 提取域名主体：去掉最后的后缀部分
+        const parts = domain.split('.');
+        if (parts.length >= 2) {
+          return parts[0]; // 只返回第一部分
+        }
+        
+        // 提取不到就返回hostname
+        return hostname;
       } catch (error) {
-        console.warn(`❌ [标题获取] Web模式请求失败: ${error.message}:`, url, error);
-        throw error;
+        // 解析失败返回原始URL
+        return url;
       }
+    } catch (error) {
+      console.warn('通过消息获取标题失败:', error);
+      // 失败时返回空字符串
+      return '';
     }
   }
 
