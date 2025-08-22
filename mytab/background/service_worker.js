@@ -249,17 +249,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       // 从备份恢复数据
       if (msg?.type === 'backup:restore') {
         const { name } = msg;
-        const { settings } = await readAll();
-        const client = new WebDAVClient(settings.webdav);
-        const json = await client.downloadJSON(name);
-        
-        // 安全恢复：仅使用data字段，避免覆盖设置
-        const restored = json?.data || {};
-        await chrome.storage.local.set({ data: restored });
-        sendResponse({ ok: true });
-        
-        // 通知前端数据已更新，触发界面刷新
-        chrome.runtime.sendMessage({ type: 'data:changed' }).catch(() => {});
+        const result = await syncFromCloud(name);
+        sendResponse({ ok: true, result });
         return;
       }
       
