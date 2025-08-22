@@ -632,6 +632,7 @@ export async function moveBookmark({
   targetFolderId
 }) {
   const data = await readData();
+  debugger
   const sourceFolder = findFolderById(data.folders, sourceFolderId);
   const targetFolder = findFolderById(data.folders, targetFolderId);
 

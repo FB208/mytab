@@ -410,7 +410,10 @@ async function renderFolderList() {
     
     // 作为拖拽目标：允许放置书签和文件夹
     el.addEventListener('dragover', (ev) => {
+      console.log('dragover', ev.dataTransfer.types, sessionStorage.getItem('dragData'));
       ev.preventDefault();
+      ev.stopPropagation();
+      
       const rect = el.getBoundingClientRect();
       const clientY = ev.clientY;
       const centerY = rect.top + rect.height / 2;
@@ -423,10 +426,10 @@ async function renderFolderList() {
       
       if (dragData && dragData.startsWith('folder:')) {
         const moveFolderId = dragData.replace('folder:', '');
-        const moveFolder = findFolderById(data.folders, moveFolderId);
+        const movingFolder = findFolderById(data.folders, moveFolderId);
         
         // 只有同级一级文件夹才支持排序
-        if (moveFolder && !moveFolder.parentId && !folder.parentId && moveFolderId !== folder.id) {
+        if (movingFolder && !movingFolder.parentId && !folder.parentId && moveFolderId !== folder.id) {
           if (clientY < centerY - threshold) {
             // 上方区域：排序到前面
             el.classList.add('drag-over-top');
@@ -437,8 +440,9 @@ async function renderFolderList() {
             ev.dataTransfer.dropEffect = 'move';
           } else {
             // 中间区域：移入文件夹
+            console.log('drag-over-center', ev.dataTransfer.types, sessionStorage.getItem('dragData'));
             el.classList.add('drag-over-center');
-            ev.dataTransfer.dropEffect = 'copy';
+            ev.dataTransfer.dropEffect = 'move';
           }
           return;
         }
@@ -446,14 +450,16 @@ async function renderFolderList() {
       
       // 其他情况（书签拖拽或不同级文件夹）：移入文件夹
       el.classList.add('drag-over-center');
-      ev.dataTransfer.dropEffect = 'copy';
+      ev.dataTransfer.dropEffect = 'move';
     });
     
     el.addEventListener('dragleave', () => {
       el.classList.remove('drag-over-top', 'drag-over-bottom', 'drag-over-center');
     });
     el.addEventListener('drop', async (ev) => {
+      console.log('drop', ev);
       ev.preventDefault();
+      ev.stopPropagation();
       el.classList.remove('drag-over-top', 'drag-over-bottom', 'drag-over-center');
       
       const dragData = ev.dataTransfer.getData('text/plain');
@@ -464,10 +470,10 @@ async function renderFolderList() {
         const moveFolderId = dragData.replace('folder:', '');
         if (moveFolderId === folder.id) return; // 不能拖拽到自己
         
-        const moveFolder = findFolderById(data.folders, moveFolderId);
+        const movingFolder = findFolderById(data.folders, moveFolderId);
         
         // 检查是否是同级一级文件夹之间的排序
-        if (moveFolder && !moveFolder.parentId && !folder.parentId) {
+        if (movingFolder && !movingFolder.parentId && !folder.parentId) {
           // 判断拖拽区域决定操作类型
           const rect = el.getBoundingClientRect();
           const clientY = ev.clientY;
@@ -503,18 +509,25 @@ async function renderFolderList() {
         }
         return;
       }
-      
+      console.log('dragData', dragData);
+      debugger
       // 处理书签拖拽
-      const bookmarkId = dragData;
-      if (!state.selectedFolderId) return;
-      
-      const ok = await moveBookmark({
-        sourceFolderId: state.selectedFolderId,
-        bookmarkId,
-        targetFolderId: folder.id
-      });
-      if (ok) {
-        renderBookmarkGrid();
+      if (dragData.startsWith('bookmark:')) {
+        const parts = dragData.split(':');
+        if (parts.length >= 3) {
+          const bookmarkId = parts[1];
+          const sourceFolderId = parts[2];
+          
+          const ok = await moveBookmark({
+            sourceFolderId,
+            bookmarkId,
+            targetFolderId: folder.id
+          });
+          if (ok) {
+            renderBookmarkGrid();
+          }
+        }
+        return;
       }
     });
     
@@ -733,10 +746,10 @@ async function renderBookmarkGrid() {
         
         if (dragData && dragData.startsWith('folder:')) {
           const moveFolderId = dragData.replace('folder:', '');
-          const moveFolder = findFolderById(data.folders, moveFolderId);
+          const movingFolder = findFolderById(data.folders, moveFolderId);
           
           // 只有同级子文件夹才支持排序
-          if (moveFolder && moveFolder.parentId === currentFolder.id && moveFolderId !== subfolder.id) {
+          if (movingFolder && movingFolder.parentId === currentFolder.id && moveFolderId !== subfolder.id) {
             // 划分区域：左侧40%、右侧40%、中间20%
             if (x < width * 0.4) {
               // 左侧区域：排序到前面
@@ -749,7 +762,7 @@ async function renderBookmarkGrid() {
             } else {
               // 中间区域：移入子文件夹
               el.classList.add('drag-over-center');
-              ev.dataTransfer.dropEffect = 'copy';
+              ev.dataTransfer.dropEffect = 'move';
             }
             return;
           }
@@ -757,7 +770,7 @@ async function renderBookmarkGrid() {
         
         // 其他情况（书签拖拽或不同级文件夹）：移入文件夹
         el.classList.add('drag-over-center');
-        ev.dataTransfer.dropEffect = 'copy';
+        ev.dataTransfer.dropEffect = 'move';
       });
       
       el.addEventListener('dragleave', () => {
@@ -765,6 +778,7 @@ async function renderBookmarkGrid() {
       });
       
       el.addEventListener('drop', async (ev) => {
+        console.log('subfolder drop', ev);
         ev.preventDefault();
         el.classList.remove('drag-over-left', 'drag-over-right', 'drag-over-center');
         
@@ -775,10 +789,10 @@ async function renderBookmarkGrid() {
           const moveFolderId = dragData.replace('folder:', '');
           if (moveFolderId === subfolder.id) return;
           
-          const moveFolder = findFolderById(data.folders, moveFolderId);
+          const movingFolder = findFolderById(data.folders, moveFolderId);
           
           // 检查是否是同级子文件夹之间的排序
-          if (moveFolder && moveFolder.parentId === currentFolder.id) {
+          if (movingFolder && movingFolder.parentId === currentFolder.id) {
             // 判断拖拽区域决定操作类型
             const rect = el.getBoundingClientRect();
             const x = ev.clientX - rect.left;
@@ -814,6 +828,25 @@ async function renderBookmarkGrid() {
         }
         
         // 处理书签拖拽
+        if (dragData.startsWith('bookmark:')) {
+          const parts = dragData.split(':');
+          if (parts.length >= 3) {
+            const bookmarkId = parts[1];
+            const sourceFolderId = parts[2];
+            
+            const ok = await moveBookmark({
+              sourceFolderId,
+              bookmarkId,
+              targetFolderId: subfolder.id
+            });
+            if (ok) {
+              renderBookmarkGrid();
+            }
+          }
+          return;
+        }
+        
+        // 兼容旧格式：纯书签ID
         const bookmarkId = dragData;
         if (!bookmarkId) return;
         
@@ -851,29 +884,87 @@ async function renderBookmarkGrid() {
     if (titleEl) titleEl.textContent = bm.name || bm.url;
     // 拖拽属性
     el.setAttribute('draggable', 'true');
+    
     el.addEventListener('dragstart', (ev) => {
+      console.log('bookmark dragstart', bm.id, state.selectedFolderId);
       dragState.type = 'bookmark';
-      dragState.data = bm.id;
-      ev.dataTransfer.setData('text/plain', bm.id);
+      dragState.data = { bookmarkId: bm.id, sourceFolderId: state.selectedFolderId };
+      const dragData = `bookmark:${bm.id}:${state.selectedFolderId}`;
+      ev.dataTransfer.setData('text/plain', dragData);
       ev.dataTransfer.effectAllowed = 'move';
+      // 存储到sessionStorage以便在dragover中访问
+      sessionStorage.setItem('dragData', dragData);
     });
     
     // 拖拽结束：清理状态
     el.addEventListener('dragend', () => {
       dragState.type = null;
       dragState.data = null;
+      sessionStorage.removeItem('dragData');
     });
     el.addEventListener('dragover', (ev) => {
       ev.preventDefault();
+      
+      const rect = el.getBoundingClientRect();
+      const x = ev.clientX - rect.left;
+      const width = rect.width;
+      
+      // 清除所有拖拽样式
+      el.classList.remove('drag-over-left', 'drag-over-right');
+      
+      const dragData = sessionStorage.getItem('dragData');
+      
+      // 只有书签拖拽才显示左右区域识别效果
+      if (dragData && dragData.startsWith('bookmark:')) {
+        const parts = dragData.split(':');
+        if (parts.length >= 3) {
+          const sourceFolderId = parts[2];
+          // 确保是同一文件夹内的书签排序
+          if (sourceFolderId === state.selectedFolderId) {
+            // 划分区域：左侧50%、右侧50%
+            if (x < width * 0.5) {
+              // 左侧区域：排序到前面
+              el.classList.add('drag-over-left');
+            } else {
+              // 右侧区域：排序到后面
+              el.classList.add('drag-over-right');
+            }
+          }
+        }
+      }
+      
       ev.dataTransfer.dropEffect = 'move';
+    });
+    el.addEventListener('dragleave', () => {
+      el.classList.remove('drag-over-left', 'drag-over-right');
     });
     el.addEventListener('drop', async (ev) => {
       ev.preventDefault();
-      const sourceId = ev.dataTransfer.getData('text/plain');
+      el.classList.remove('drag-over-left', 'drag-over-right');
+      const dragData = ev.dataTransfer.getData('text/plain');
       const targetId = bm.id;
-      if (!sourceId || sourceId === targetId) return;
+      if (!dragData || dragData === targetId) return;
+      
       // 检查是否是文件夹拖拽，如果是则跳过
-      if (sourceId.startsWith('folder:')) return;
+      if (dragData.startsWith('folder:')) return;
+      
+      let sourceId;
+      if (dragData.startsWith('bookmark:')) {
+        const parts = dragData.split(':');
+        if (parts.length >= 3) {
+          sourceId = parts[1];
+          // 对于书签排序，只允许同一文件夹内的书签重排序
+          const sourceFolderId = parts[2];
+          if (sourceFolderId !== state.selectedFolderId) return;
+        } else {
+          return;
+        }
+      } else {
+        // 兼容旧格式：纯书签ID
+        sourceId = dragData;
+      }
+      
+      if (!sourceId || sourceId === targetId) return;
       
       await reorderBookmarksRelative({
         folderId: state.selectedFolderId,
