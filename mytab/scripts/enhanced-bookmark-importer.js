@@ -4,7 +4,8 @@
  * 支持并发控制、进度回调和错误处理
  */
 
-import { Semaphore, ProgressTracker, EnhancementCache } from './enhancement-utils.js';
+import { Semaphore, ProgressTracker } from './enhancement-utils.js';
+import { generateId } from './storage.js';
 
 /**
  * 增强书签导入器类
@@ -26,13 +27,11 @@ export class EnhancedBookmarkImporter {
     this.timeout = options.timeout || 8000;
     this.onProgress = options.onProgress || (() => {});
     this.onError = options.onError || (() => {});
-    this.enableCache = options.enableCache !== false;
     this.enableDynamicConcurrency = options.enableDynamicConcurrency !== false;
     
     // 初始化工具类
     this.semaphore = new Semaphore(this.concurrency);
     this.progressTracker = new ProgressTracker(this.onProgress, 100);
-    this.cache = this.enableCache ? new EnhancementCache(1000, 50) : null;
     
     // 动态并发调整相关
     this.failureWindow = []; // 失败记录窗口
@@ -47,7 +46,6 @@ export class EnhancedBookmarkImporter {
       processed: 0,
       successful: 0,
       failed: 0,
-      cached: 0,
       startTime: 0,
       errors: [],
       errorsByType: {
@@ -81,7 +79,6 @@ export class EnhancedBookmarkImporter {
         processed: 0,
         successful: 0,
         failed: 0,
-        cached: 0,
         startTime: Date.now(),
         errors: [],
         errorsByType: {
@@ -191,7 +188,6 @@ export class EnhancedBookmarkImporter {
         processed: 0,
         successful: 0,
         failed: 0,
-        cached: 0,
         startTime: Date.now(),
         errors: [],
         errorsByType: {
@@ -293,6 +289,7 @@ export class EnhancedBookmarkImporter {
 
   /**
    * 增强单个书签信息
+   * 使用Chrome Bookmarks API获取标题，保持图标获取逻辑
    * @param {Object} bookmark - 书签对象
    * @returns {Promise<Object>} 增强后的书签对象
    */
@@ -302,39 +299,8 @@ export class EnhancedBookmarkImporter {
     }
 
     try {
-      // 检查缓存
-      if (this.cache) {
-        const cached = this.cache.get(bookmark.url);
-        if (cached) {
-          this.stats.cached++;
-          // 缓存的标题可能为空字符串，需要正确处理
-          const finalTitle = (cached.title && cached.title.trim()) ? cached.title : bookmark.title || '无标题书签';
-          return {
-            ...bookmark,
-            originalTitle: bookmark.title, // 保留原始标题
-            title: finalTitle, // 使用缓存的标题，如果为空则使用原始标题
-            iconType: cached.iconType,
-            iconUrl: cached.iconUrl,
-            mono: cached.mono,
-            enhanced: true,
-            enhancedAt: Date.now()
-          };
-        }
-      }
-
       // 使用带错误恢复的增强方法
       const enhancedBookmark = await this.enhanceBookmarkWithFallback(bookmark);
-
-      // 缓存结果（仅缓存成功增强的书签）
-      if (this.cache && enhancedBookmark.enhanced) {
-        this.cache.set(bookmark.url, {
-          title: enhancedBookmark.title || '', // 始终缓存标题，即使与原始标题相同
-          iconType: enhancedBookmark.iconType,
-          iconUrl: enhancedBookmark.iconUrl,
-          mono: enhancedBookmark.mono
-        });
-      }
-
       return enhancedBookmark;
 
     } catch (error) {
@@ -351,51 +317,59 @@ export class EnhancedBookmarkImporter {
 
   /**
    * 带错误恢复机制的书签增强方法
-   * 分别尝试获取标题和图标，失败时使用备选方案
+   * 使用Chrome Bookmarks API获取标题，保持图标获取逻辑
    * @param {Object} bookmark - 原始书签对象
-   * @returns {Promise<Object>} 增强后的书签对象
+   * @returns {Promise<Object>} 增强后的书签对象（符合标准格式）
    */
   async enhanceBookmarkWithFallback(bookmark) {
+    // 创建符合标准格式的书签对象
     const enhancedBookmark = {
-      ...bookmark,
-      originalTitle: bookmark.title, // 保留原始标题
+      id: bookmark.id || generateId('b'),
+      url: bookmark.url || '',
+      name: bookmark.title || '无标题书签', // 使用name字段而不是title
+      iconType: 'favicon',
+      iconUrl: '',
+      iconDataUrl: '',
+      mono: null,
+      remark: '',
       enhanced: false,
-      enhancedAt: Date.now()
+      enhancedAt: Date.now(),
+      originalTitle: bookmark.title // 保留原始标题用于日志
     };
 
     let titleSuccess = false;
     let iconSuccess = false;
 
-    // 尝试获取真实标题
+    // 使用Chrome Bookmarks API获取标题
     console.log(`🔍 [书签增强] 开始获取标题: "${bookmark.title}" -> ${bookmark.url}`);
     try {
-      const titleResult = await this._fetchTitleViaMessage(bookmark.url);
-      console.log(`📝 [书签增强] 标题获取结果:`, {
-        url: bookmark.url,
-        originalTitle: bookmark.title,
-        fetchedTitle: titleResult,
-        success: !!titleResult
-      });
-      
-      if (titleResult) {
-        enhancedBookmark.title = titleResult;
-        titleSuccess = true;
-        console.log(`✅ [书签增强] 标题更新成功: "${bookmark.title}" -> "${titleResult}":`, bookmark.url);
+      if (bookmark.id && chrome?.bookmarks?.get) {
+        const results = await new Promise((resolve) => {
+          chrome.bookmarks.get(bookmark.id, resolve);
+        });
+        
+        if (results && results[0] && results[0].title) {
+          // 清理书名中的JSON字符串，只保留真正的书名部分
+          enhancedBookmark.name = this._cleanBookmarkTitle(results[0].title);
+          titleSuccess = true;
+          console.log(`✅ [书签增强] 标题更新成功: "${bookmark.title}" -> "${enhancedBookmark.name}":`, bookmark.url);
+        } else {
+          enhancedBookmark.name = this._cleanBookmarkTitle(bookmark.title) || '无标题书签';
+          console.log(`⚠️ [书签增强] 书签API返回空标题，保持原始标题: "${enhancedBookmark.name}":`, bookmark.url);
+        }
       } else {
-        // 显式保持原始标题
-        enhancedBookmark.title = bookmark.title || '无标题书签';
-        console.log(`⚠️ [书签增强] 标题获取失败，保持原始标题: "${enhancedBookmark.title}":`, bookmark.url);
+        enhancedBookmark.name = this._cleanBookmarkTitle(bookmark.title) || '无标题书签';
+        console.log(`⚠️ [书签增强] 无书签ID或API不可用，保持原始标题: "${enhancedBookmark.name}":`, bookmark.url);
       }
     } catch (error) {
       const errorMsg = error.message || String(error);
       console.warn(`❌ [书签增强] 标题获取异常: ${errorMsg}:`, bookmark.url, error);
       this._recordError(bookmark.url, error, 'title');
-      // 显式保持原始标题
-      enhancedBookmark.title = bookmark.title || '无标题书签';
-      console.log(`🔄 [书签增强] 使用原始标题作为备选: "${enhancedBookmark.title}":`, bookmark.url);
+      enhancedBookmark.name = this._cleanBookmarkTitle(bookmark.title) || '无标题书签';
+      console.log(`🔄 [书签增强] 使用原始标题作为备选: "${enhancedBookmark.name}":`, bookmark.url);
     }
 
-    // 尝试获取favicon图标
+    // 尝试获取favicon图标（保持原有逻辑）
     try {
       const iconResult = await this._fetchFaviconWithTimeout(bookmark.url);
       if (iconResult && iconResult.length > 0) {
@@ -409,7 +383,7 @@ export class EnhancedBookmarkImporter {
 
     // 如果图标获取失败，使用单色图标备选方案
     if (!iconSuccess) {
-      const displayTitle = enhancedBookmark.title || enhancedBookmark.originalTitle || enhancedBookmark.url;
+      const displayTitle = enhancedBookmark.name || enhancedBookmark.originalTitle || enhancedBookmark.url;
       const letter = this._extractFirstLetter(displayTitle);
       
       enhancedBookmark.iconType = 'mono';
@@ -422,32 +396,23 @@ export class EnhancedBookmarkImporter {
     // 如果至少有一项增强成功，标记为已增强
     enhancedBookmark.enhanced = titleSuccess || iconSuccess;
 
+    // 移除临时字段，返回标准格式的书签
+    delete enhancedBookmark.originalTitle;
     return enhancedBookmark;
   }
 
   /**
-   * 获取网站标题和favicon
+   * 获取网站favicon
    * @param {string} url - 网站URL
-   * @returns {Promise<Object>} 包含title和icons的对象
+   * @returns {Promise<string[]>} 图标URL数组
    */
-  async fetchTitleAndFavicon(url) {
+  async fetchFavicon(url) {
     try {
-      // 并行获取标题和图标，提高效率
-      const [titleResult, iconsResult] = await Promise.allSettled([
-        this._fetchTitleViaMessage(url),
-        this._fetchFaviconWithTimeout(url)
-      ]);
-
-      const title = titleResult.status === 'fulfilled' ? titleResult.value : null;
-      const icons = iconsResult.status === 'fulfilled' ? iconsResult.value || [] : [];
-
-      return { title, icons };
+      const iconsResult = await this._fetchFaviconWithTimeout(url);
+      return iconsResult || [];
     } catch (error) {
-      console.warn('获取标题和图标失败:', url, error);
-      return {
-        title: null, // 返回null表示获取失败，而不是空字符串
-        icons: []
-      };
+      console.warn('获取图标失败:', url, error);
+      return [];
     }
   }
 
@@ -602,6 +567,25 @@ export class EnhancedBookmarkImporter {
   // ==================== 私有方法 ====================
 
   /**
+   * 清理书签标题，移除JSON字符串等冗余信息
+   * @param {string} title - 原始书签标题
+   * @returns {string} 清理后的书签标题
+   * @private
+   */
+  _cleanBookmarkTitle(title) {
+    if (!title) return '';
+    
+    // 如果标题包含JSON字符串（如：BOSS{"favicon":"..."}），提取前面的文本部分
+    const jsonMatch = title.match(/^([^{]+)({.*})$/);
+    if (jsonMatch && jsonMatch[1]) {
+      return jsonMatch[1].trim();
+    }
+    
+    // 返回原始标题（去除前后空格）
+    return title.trim();
+  }
+
+  /**
    * 从书签树中提取所有书签
    * @param {Array} bookmarkTree - Chrome书签树
    * @returns {Array} 书签数组
@@ -739,53 +723,6 @@ export class EnhancedBookmarkImporter {
 
 
 
-
-  /**
-   * 通过消息机制获取网站标题
-   * @param {string} url - 网站URL
-   * @returns {Promise<string>} 网站标题
-   * @private
-   */
-  async _fetchTitleViaMessage(url) {
-    try {
-      if (chrome?.runtime?.sendMessage) {
-        const response = await chrome.runtime.sendMessage({ 
-          type: 'title:fetch', 
-          url: url 
-        });
-        return response?.title || '';
-      }
-      // 如果没有chrome runtime API，使用简单的域名提取作为fallback
-      try {
-        const urlObj = new URL(url);
-        const hostname = urlObj.hostname;
-        
-        // 如果是IP地址，返回 IP:端口 格式
-        if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname)) {
-          return urlObj.port ? `${hostname}:${urlObj.port}` : hostname;
-        }
-        
-        // 去掉www前缀
-        let domain = hostname.replace(/^www\./, '');
-        
-        // 提取域名主体：去掉最后的后缀部分
-        const parts = domain.split('.');
-        if (parts.length >= 2) {
-          return parts[0]; // 只返回第一部分
-        }
-        
-        // 提取不到就返回hostname
-        return hostname;
-      } catch (error) {
-        // 解析失败返回原始URL
-        return url;
-      }
-    } catch (error) {
-      console.warn('通过消息获取标题失败:', error);
-      // 失败时返回空字符串
-      return '';
-    }
-  }
 
   /**
    * 带超时控制的图标获取方法
