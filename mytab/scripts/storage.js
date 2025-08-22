@@ -185,9 +185,13 @@ export async function ensureInit() {
   
   // 如果需要迁移，保存迁移后的数据
   if (needsMigration) {
-    migratedData.lastModified = Date.now();
+    // 保持原有的lastModified时间戳，避免影响云端同步判断
+    // 只有真正的用户数据变化才应该更新时间戳
+    if (!migratedData.lastModified) {
+      migratedData.lastModified = Date.now();
+    }
     await writeData(migratedData);
-    console.log('数据已成功迁移到新的无限层级结构');
+    console.log('数据已成功迁移到新的无限层级结构（保持原时间戳）');
   }
 }
 
