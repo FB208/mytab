@@ -55,38 +55,11 @@
         <div class="options-block">
           <h3 class="options-block-title">数据导入</h3>
           <div class="options-row">
-            <button id="btn-import-bookmarks" class="primary-btn">导入浏览器书签</button>
+            <button id="btn-import-bookmarks" class="primary-btn import-btn">导入浏览器书签</button>
             <div class="options-help">
               <h4 style="margin: 0 0 8px 0; color: var(--text-primary);">功能说明</h4>
               <p>将浏览器书签导入到本插件中，完整保持文件夹层级结构。导入过程中会显示详细的进度信息，包括当前处理的网站和完成百分比。</p>
-              
-              <h4 style="margin: 16px 0 8px 0; color: var(--text-primary);">导入模式</h4>
-              <div style="margin-left: 12px;">
-                <p><strong>🚀 增强导入（推荐）</strong></p>
-                <ul style="margin: 4px 0 12px 20px; color: var(--text-dim);">
-                  <li>自动获取每个网站的真实标题</li>
-                  <li>自动获取网站的 favicon 图标</li>
-                  <li>失败时自动使用备选方案（原始标题 + 单色图标）</li>
-                  <li>支持并发处理，提高导入效率</li>
-                  <li>显示详细的进度信息和统计数据</li>
-                </ul>
-                
-                <p><strong>⚡ 快速导入</strong></p>
-                <ul style="margin: 4px 0 12px 20px; color: var(--text-dim);">
-                  <li>仅导入书签的基本信息（标题、URL）</li>
-                  <li>速度快，适合大量书签的快速导入</li>
-                  <li>不获取网站标题和图标</li>
-                </ul>
-              </div>
-              
-              <h4 style="margin: 16px 0 8px 0; color: var(--text-primary);">使用提示</h4>
-              <ul style="margin: 4px 0 0 20px; color: var(--text-dim);">
-                <li>增强导入过程中可随时取消，已处理的数据会保留</li>
-                <li>网络超时或错误不会影响整个导入过程</li>
-                <li>导入完成后会显示成功和失败的统计信息</li>
-                <li>建议在网络状况良好时使用增强导入功能</li>
-                <li>大量书签（500+）建议分批导入或使用快速模式</li>
-              </ul>
+
             </div>
           </div>
         </div>
@@ -105,41 +78,6 @@
             <button id="btn-refresh-list" class="ghost-btn">刷新列表</button>
           </div>
           <ul id="backup-list" class="options-list"></ul>
-        </div>
-
-        <div class="options-block">
-          <h3 class="options-block-title">使用帮助</h3>
-          <div class="options-help">
-            <h4 style="margin: 0 0 8px 0; color: var(--text-primary);">常见问题</h4>
-            <details style="margin-bottom: 12px;">
-              <summary style="cursor: pointer; color: var(--text-primary); font-weight: 500;">增强导入失败怎么办？</summary>
-              <div style="margin: 8px 0 0 16px; color: var(--text-dim); font-size: 13px;">
-                <p>• 检查网络连接是否正常</p>
-                <p>• 某些网站可能限制访问，这是正常现象</p>
-                <p>• 失败的书签会自动使用原始标题和单色图标</p>
-                <p>• 可以稍后重新导入失败的书签</p>
-              </div>
-            </details>
-            
-            <details style="margin-bottom: 12px;">
-              <summary style="cursor: pointer; color: var(--text-primary); font-weight: 500;">导入速度很慢怎么办？</summary>
-              <div style="margin: 8px 0 0 16px; color: var(--text-dim); font-size: 13px;">
-                <p>• 增强导入需要访问每个网站获取信息，速度相对较慢</p>
-                <p>• 建议在网络状况良好时进行导入</p>
-                <p>• 大量书签（500+）建议使用快速导入模式</p>
-                <p>• 可以随时取消导入，已处理的数据会保留</p>
-              </div>
-            </details>
-            
-            <details>
-              <summary style="cursor: pointer; color: var(--text-primary); font-weight: 500;">如何选择导入模式？</summary>
-              <div style="margin: 8px 0 0 16px; color: var(--text-dim); font-size: 13px;">
-                <p>• <strong>增强导入</strong>：首次使用推荐，获得最佳体验</p>
-                <p>• <strong>快速导入</strong>：网络不佳或书签很多时使用</p>
-                <p>• 两种模式都会完整保持文件夹结构</p>
-              </div>
-            </details>
-          </div>
         </div>
 
       </section>

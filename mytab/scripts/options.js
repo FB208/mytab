@@ -47,6 +47,26 @@ window.clearWebdavPermissions = async function() {
   return await removeWebdavPermissions(url);
 };
 
+// 测试函数 - 直接显示书签导入完成弹窗
+window.testImportResultDialog = function() {
+  const testStats = {
+    foldersCount: 5,
+    bookmarksCount: 42,
+    enhancedBookmarksCount: 35
+  };
+  
+  const testImportResult = {
+    stats: {
+      successful: 35,
+      failed: 7,
+      processed: 42,
+      cached: 10
+    }
+  };
+  
+  showImportResultDialog(testStats, testImportResult);
+};
+
 /**
  * 页面初始化函数
  * 1. 从存储中读取当前配置并填充表单
@@ -430,66 +450,74 @@ async function showImportOptionsDialog() {
     title.style.fontWeight = '600';
     title.style.color = 'var(--text)';
 
-    // 选项说明
-    const description = document.createElement('p');
-    description.textContent = '请选择导入模式（建议首次使用选择增强导入）：';
-    description.style.margin = '0 0 16px 0';
-    description.style.fontSize = '14px';
-    description.style.color = 'var(--text-dim)';
 
-    // 增强导入选项
+    // 增强导入选项 - 陶瓷拟态风格
     const enhancedOption = document.createElement('label');
-    enhancedOption.className = 'options-inline';
-    enhancedOption.style.display = 'block';
+    enhancedOption.className = 'choice-btn';
+    enhancedOption.style.display = 'flex';
+    enhancedOption.style.flexDirection = 'row';
+    enhancedOption.style.alignItems = 'flex-start';
+    enhancedOption.style.justifyContent = 'flex-start';
+    enhancedOption.style.textAlign = 'left';
+    enhancedOption.style.padding = '16px';
     enhancedOption.style.marginBottom = '12px';
-    enhancedOption.style.padding = '12px';
-    enhancedOption.style.backgroundColor = 'rgba(255,255,255,0.3)';
-    enhancedOption.style.borderRadius = '8px';
-    enhancedOption.style.border = '1px solid rgba(255,255,255,0.2)';
     enhancedOption.style.cursor = 'pointer';
+    enhancedOption.style.gap = '12px';
 
     const enhancedRadio = document.createElement('input');
     enhancedRadio.type = 'radio';
     enhancedRadio.name = 'importMode';
     enhancedRadio.value = 'enhanced';
     enhancedRadio.checked = true;
+    enhancedRadio.style.marginTop = '2px';
 
     const enhancedLabel = document.createElement('div');
+    enhancedLabel.style.flex = '1';
     enhancedLabel.innerHTML = `
-      <strong>🚀 增强导入（推荐）</strong><br>
-      <small style="color: var(--text-dim);">自动获取网站真实标题和 favicon 图标<br>
-      • 支持并发处理，提高导入效率<br>
-      • 显示详细进度和统计信息<br>
-      • 网络错误时自动使用备选方案<br>
-      • 可随时取消，已处理数据会保留</small>
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+        <span style="font-size: 20px;">🚀</span>
+        <strong style="font-size: 15px; color: var(--text);">增强导入（推荐）</strong>
+      </div>
+      <div style="font-size: 15px; color: var(--text-dim); line-height: 1.5;">
+        • 自动获取网站真实标题和图标<br>
+        • 并发处理，效率更高<br>
+        • 网络异常时自动降级
+      </div>
     `;
 
     enhancedOption.appendChild(enhancedRadio);
     enhancedOption.appendChild(enhancedLabel);
 
-    // 快速导入选项
+    // 快速导入选项 - 陶瓷拟态风格
     const quickOption = document.createElement('label');
-    quickOption.className = 'options-inline';
-    quickOption.style.display = 'block';
+    quickOption.className = 'choice-btn';
+    quickOption.style.display = 'flex';
+    quickOption.style.flexDirection = 'row';
+    quickOption.style.alignItems = 'flex-start';
+    quickOption.style.justifyContent = 'flex-start';
+    quickOption.style.textAlign = 'left';
+    quickOption.style.padding = '16px';
     quickOption.style.marginBottom = '20px';
-    quickOption.style.padding = '12px';
-    quickOption.style.backgroundColor = 'rgba(255,255,255,0.3)';
-    quickOption.style.borderRadius = '8px';
-    quickOption.style.border = '1px solid rgba(255,255,255,0.2)';
     quickOption.style.cursor = 'pointer';
+    quickOption.style.gap = '12px';
 
     const quickRadio = document.createElement('input');
     quickRadio.type = 'radio';
     quickRadio.name = 'importMode';
     quickRadio.value = 'quick';
+    quickRadio.style.marginTop = '2px';
 
     const quickLabel = document.createElement('div');
+    quickLabel.style.flex = '1';
     quickLabel.innerHTML = `
-      <strong>⚡ 快速导入</strong><br>
-      <small style="color: var(--text-dim);">仅导入书签基本信息（标题、URL）<br>
-      • 速度快，适合大量书签导入<br>
-      • 不获取网站标题和图标<br>
-      • 适合网络环境不佳时使用</small>
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+        <span style="font-size: 20px;">⚡</span>
+        <strong style="font-size: 15px; color: var(--text);">快速导入</strong>
+      </div>
+      <div style="font-size: 15px; color: var(--text-dim); line-height: 1.5;">
+        • 仅导入文件夹和书签<br>
+        • 速度很快<br>
+      </div>
     `;
 
     quickOption.appendChild(quickRadio);
@@ -518,7 +546,6 @@ async function showImportOptionsDialog() {
 
     // 组装DOM结构
     inner.appendChild(title);
-    inner.appendChild(description);
     inner.appendChild(enhancedOption);
     inner.appendChild(quickOption);
     inner.appendChild(buttonContainer);
@@ -578,115 +605,137 @@ function showImportResultDialog(stats, importResult = null) {
   const modal = document.createElement('div');
   modal.className = 'modal';
 
-  // 创建对话框面板
+  // 创建对话框面板 - 简洁玻璃拟态风格
   const panel = document.createElement('div');
   panel.className = 'panel glass';
+  panel.style.cssText = `
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(10px);
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+    padding: 24px;
+    max-width: 400px;
+    margin: 20px;
+  `;
 
   // 创建内容区域
   const inner = document.createElement('div');
   inner.className = 'inner';
+  inner.style.cssText = `
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+  `;
+
 
   // 标题
   const title = document.createElement('h3');
   title.textContent = '书签导入完成';
-  title.style.margin = '0 0 20px 0';
-  title.style.fontSize = '18px';
-  title.style.fontWeight = '600';
-  title.style.color = 'var(--text)';
-
-  // 成功图标
-  const successIcon = document.createElement('div');
-  successIcon.textContent = '✅';
-  successIcon.style.fontSize = '48px';
-  successIcon.style.textAlign = 'center';
-  successIcon.style.marginBottom = '16px';
+  title.style.cssText = `
+    margin: 0;
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--text);
+    text-align: center;
+  `;
 
   // 统计信息容器
   const statsContainer = document.createElement('div');
-  statsContainer.style.backgroundColor = 'rgba(255,255,255,0.3)';
-  statsContainer.style.borderRadius = '12px';
-  statsContainer.style.padding = '16px';
-  statsContainer.style.marginBottom = '20px';
+  statsContainer.style.cssText = `
+    background: rgba(255, 255, 255, 0.5);
+    border-radius: 12px;
+    padding: 16px;
+    width: 100%;
+  `;
+
+  const foldersCount = stats.foldersCount || 0;
+  const bookmarksCount = stats.bookmarksCount || 0;
 
   // 基本统计
   const basicStats = document.createElement('div');
-  basicStats.style.marginBottom = '12px';
-  
-  const foldersCount = stats.foldersCount || 0;
-  const bookmarksCount = stats.bookmarksCount || 0;
-  
+  basicStats.style.cssText = `
+    display: flex;
+    justify-content: space-around;
+    margin-bottom: 16px;
+  `;
+
   basicStats.innerHTML = `
-    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-      <span>文件夹数量：</span>
-      <strong>${foldersCount}</strong>
+    <div style="text-align: center;">
+      <div style="font-size: 24px; font-weight: 700; color: var(--primary);">${foldersCount}</div>
+      <div style="font-size: 13px; color: var(--text-dim);">文件夹</div>
     </div>
-    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-      <span>书签数量：</span>
-      <strong>${bookmarksCount}</strong>
+    <div style="text-align: center;">
+      <div style="font-size: 24px; font-weight: 700; color: var(--accent);">${bookmarksCount}</div>
+      <div style="font-size: 13px; color: var(--text-dim);">书签</div>
     </div>
   `;
 
+  // 添加"导入结果"标题
+  const importResultTitle = document.createElement('div');
+  importResultTitle.textContent = '导入结果';
+  importResultTitle.style.cssText = `
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 10px;
+    text-align: center;
+  `;
+
   // 增强统计（如果有）
-  const enhancedStats = document.createElement('div');
   if (importResult && importResult.stats) {
     const { successful = 0, failed = 0, processed = 0 } = importResult.stats;
-    const enhancedCount = stats.enhancedBookmarksCount || successful;
     
     if (processed > 0) {
+      const enhancedStats = document.createElement('div');
+      enhancedStats.style.cssText = `
+        border-top: 1px solid rgba(0, 0, 0, 0.1);
+        padding-top: 12px;
+        text-align: center;
+      `;
+
       enhancedStats.innerHTML = `
-        <hr style="margin: 12px 0; border: none; border-top: 1px solid rgba(255,255,255,0.2);">
-        <div style="margin-bottom: 8px; font-weight: 600; color: var(--primary);">增强结果：</div>
-        <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
-          <span>成功增强：</span>
-          <strong style="color: #10b981;">${successful}</strong>
-        </div>
-        <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
-          <span>增强失败：</span>
-          <strong style="color: #ef4444;">${failed}</strong>
-        </div>
-        <div style="display: flex; justify-content: space-between;">
-          <span>增强率：</span>
-          <strong>${processed > 0 ? Math.round((successful / processed) * 100) : 0}%</strong>
+        <div style="font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 10px;">增强结果</div>
+        <div style="display: flex; justify-content: space-around;">
+          <div style="color: #10b981;">${successful} 成功</div>
+          <div style="color: #ef4444;">${failed} 失败</div>
+          <div>${Math.round((successful / processed) * 100)}%</div>
         </div>
       `;
+      statsContainer.appendChild(importResultTitle);
+      statsContainer.appendChild(basicStats);
+      statsContainer.appendChild(enhancedStats);
+    } else {
+      statsContainer.appendChild(basicStats);
     }
+  } else {
+    statsContainer.appendChild(basicStats);
   }
 
-  statsContainer.appendChild(basicStats);
-  statsContainer.appendChild(enhancedStats);
-
-  // 成功消息
-  const message = document.createElement('p');
-  message.style.textAlign = 'center';
-  message.style.fontSize = '14px';
-  message.style.color = 'var(--text-dim)';
-  message.style.marginBottom = '20px';
-  
-  let messageText = `✅ 成功导入 ${foldersCount} 个文件夹和 ${bookmarksCount} 个书签`;
-  if (stats.enhancedBookmarksCount > 0) {
-    messageText += `\n🚀 其中 ${stats.enhancedBookmarksCount} 个书签已成功增强（获取了真实标题和图标）`;
-  }
-  message.textContent = messageText;
-
-  // 按钮容器
-  const buttonContainer = document.createElement('div');
-  buttonContainer.style.display = 'flex';
-  buttonContainer.style.justifyContent = 'center';
 
   // 关闭按钮
   const closeBtn = document.createElement('button');
   closeBtn.className = 'primary-btn';
-  closeBtn.textContent = '关闭';
-  closeBtn.style.minWidth = '100px';
+  closeBtn.textContent = '完成';
+  closeBtn.style.cssText = `
+    background: var(--primary);
+    border: none;
+    border-radius: 8px;
+    padding: 10px 24px;
+    color: white;
+    font-weight: 500;
+    font-size: 14px;
+    cursor: pointer;
+    min-width: 100px;
+  `;
 
-  buttonContainer.appendChild(closeBtn);
+
 
   // 组装DOM结构
   inner.appendChild(title);
-  inner.appendChild(successIcon);
   inner.appendChild(statsContainer);
-  inner.appendChild(message);
-  inner.appendChild(buttonContainer);
+  inner.appendChild(closeBtn);
 
   panel.appendChild(inner);
   modal.appendChild(panel);

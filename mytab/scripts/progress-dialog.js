@@ -93,13 +93,6 @@ export class ProgressDialog {
     this.progressText.style.color = 'var(--text)';
     this.progressText.style.marginTop = '8px';
 
-    // 当前处理URL显示
-    const currentUrlLabel = document.createElement('div');
-    currentUrlLabel.textContent = '当前处理：';
-    currentUrlLabel.style.fontSize = '12px';
-    currentUrlLabel.style.color = 'var(--text-dim)';
-    currentUrlLabel.style.marginTop = '16px';
-    currentUrlLabel.style.marginBottom = '4px';
 
     this.currentUrlText = document.createElement('div');
     this.currentUrlText.textContent = '正在初始化导入过程...';
@@ -122,6 +115,19 @@ export class ProgressDialog {
     this.statsText.style.padding = '6px 12px';
     this.statsText.style.backgroundColor = 'rgba(255,255,255,0.3)';
     this.statsText.style.borderRadius = '6px';
+
+    // 提示信息：失败的书签也会被导入
+    const noticeText = document.createElement('div');
+    noticeText.textContent = '提示：失败的书签也会被导入，失败仅代表该书签无法通过互联网访问，没有获取到标题和图标';
+    noticeText.style.fontSize = '13px';
+    noticeText.style.color = '#4b5563';
+    noticeText.style.textAlign = 'center';
+    noticeText.style.marginTop = '8px';
+    noticeText.style.padding = '8px 12px';
+    noticeText.style.backgroundColor = 'rgba(59, 130, 246, 0.1)';
+    noticeText.style.borderRadius = '6px';
+    noticeText.style.border = '1px solid rgba(59, 130, 246, 0.2)';
+    noticeText.style.fontWeight = '500';
 
     // 按钮容器
     const buttonContainer = document.createElement('div');
@@ -150,9 +156,9 @@ export class ProgressDialog {
     inner.appendChild(title);
     inner.appendChild(progressContainer);
     inner.appendChild(this.progressText);
-    inner.appendChild(currentUrlLabel);
     inner.appendChild(this.currentUrlText);
     inner.appendChild(this.statsText);
+    inner.appendChild(noticeText);
     inner.appendChild(buttonContainer);
 
     panel.appendChild(inner);
