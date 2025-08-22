@@ -210,30 +210,56 @@ function bindEvents() {
       data
     } = await readAll();
     const results = [];
-    data.folders.forEach(folder => {
-      const pushItem = (bm, sub) => {
-        if (!bm) return;
-        const txt = `${bm.name || ''} ${bm.url || ''} ${bm.remark || ''}`.toLowerCase();
-        if (txt.includes(k)) {
-          results.push({
-            id: bm.id,
-            name: bm.name || bm.url,
-            url: bm.url,
-            remark: bm.remark,
-            iconType: bm.iconType,
-            iconUrl: bm.iconUrl,
-            mono: bm.mono,
-            folderId: folder.id,
-            subId: sub?.id || null,
-            folderName: folder.name,
-            subName: sub?.name || ''
-          });
+    
+    // 递归搜索子文件夹的函数
+    const searchInChildren = (children, parentFolder, parentPath = []) => {
+      if (!children) return;
+      
+      children.forEach(child => {
+        const currentPath = [...parentPath, child];
+        
+        // 搜索当前子文件夹中的书签
+        (child.bookmarks || []).forEach(b => pushItem(b, child, currentPath));
+        
+        // 递归搜索更深层的子文件夹
+        if (child.children && child.children.length > 0) {
+          searchInChildren(child.children, parentFolder, currentPath);
         }
-      };
-      (folder.bookmarks || []).forEach(b => pushItem(b, null));
-      (folder.subfolders || []).forEach(sub => (sub.bookmarks || []).forEach(b => pushItem(b, sub)));
+      });
+    };
+    
+    const pushItem = (bm, sub, path = []) => {
+      if (!bm) return;
+      const txt = `${bm.name || ''} ${bm.url || ''} ${bm.remark || ''}`.toLowerCase();
+      if (txt.includes(k)) {
+        // 构建完整的路径名称
+        const fullPath = path.map(p => p.name).join(' > ');
+        
+        results.push({
+          id: bm.id,
+          name: bm.name || bm.url,
+          url: bm.url,
+          remark: bm.remark,
+          iconType: bm.iconType,
+          iconUrl: bm.iconUrl,
+          mono: bm.mono,
+          folderId: path.length > 0 ? path[0].id : (sub ? sub.id : null),
+          subId: sub?.id || null,
+          folderName: path.length > 0 ? path[0].name : '',
+          subName: fullPath || (sub?.name || '')
+        });
+      }
+    };
+    
+    data.folders.forEach(folder => {
+      // 搜索主文件夹中的书签
+      (folder.bookmarks || []).forEach(b => pushItem(b, null, [{ id: folder.id, name: folder.name }]));
+      
+      // 搜索所有子文件夹（支持无限层级）
+      searchInChildren(folder.children || [], folder, [{ id: folder.id, name: folder.name }]);
     });
-    return results.slice(0, 200);
+    
+    return results.slice(0, 2000);
   }
 
   function toggleSearch(show) {
