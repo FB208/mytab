@@ -1020,17 +1020,15 @@ async function renderBookmarkGrid() {
           }).catch(() => {});
         }
       };
-      img.onerror = async () => {
-        // 自动降级为单色图标并持久化
+      img.onerror = () => {
+        // 图标加载失败时显示临时单色图标，但不持久化
+        // 这样用户可以手动重试或者在网络恢复后重新加载
+        img.style.display = 'none';
+        mono.style.display = 'grid';
         const letter = (bm.name || bm.url || 'W')[0] || 'W';
         const color = pickColorFromString(letter);
-        await updateBookmarkMono({
-          folderId: state.selectedFolderId,
-          bookmarkId: bm.id,
-          letter,
-          color
-        });
-        renderBookmarkGrid();
+        mono.style.background = color;
+        mono.querySelector('.letter').textContent = letter.toUpperCase();
       };
     } else if (bm.mono) {
       mono.style.display = 'grid';
