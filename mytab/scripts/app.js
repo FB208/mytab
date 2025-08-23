@@ -1585,7 +1585,7 @@ function testImageLoad(url) {
     };
     img.onload = () => done(true);
     img.onerror = () => done(false);
-    img.src = url + (url.includes('?') ? `&t=${Date.now()}` : `?t=${Date.now()}`);
+    img.src = url;
   });
 }
 
@@ -1622,7 +1622,7 @@ function imageToDataUrl(url) {
       }
     };
     img.onerror = reject;
-    img.src = url + (url.includes('?') ? `&t=${Date.now()}` : `?t=${Date.now()}`);
+    img.src = url;
   });
 }
 
