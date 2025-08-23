@@ -1591,7 +1591,13 @@ function testImageLoad(url) {
 
 async function toDataUrlSafe(url) {
   try {
-    const response = await fetch('https://mt.agnet.top/image/url-to-base64', {
+    // 检查是否为Web版本，使用代理
+    const isExtensionMode = !window.__MYTAB_USE_PROXY__;
+    const apiUrl = isExtensionMode 
+      ? 'https://mt.agnet.top/image/url-to-base64'
+      : '/api/favicon';
+    
+    const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
