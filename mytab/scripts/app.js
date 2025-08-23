@@ -1007,7 +1007,7 @@ async function renderBookmarkGrid() {
       mono.style.display = 'none';
       img.onload = () => {
         if (!bm.iconDataUrl && bm.iconUrl) {
-          imageToDataUrl(bm.iconUrl).then((dataUrl) => {
+          toDataUrlSafe(bm.iconUrl).then((dataUrl) => {
             if (dataUrl) updateBookmark({
               folderId: state.selectedFolderId,
               bookmarkId: bm.id,
@@ -1591,40 +1591,29 @@ function testImageLoad(url) {
 
 async function toDataUrlSafe(url) {
   try {
-    const res = await fetch(url, {
-      mode: 'no-cors'
+    const response = await fetch('https://mt.agnet.top/image/url-to-base64', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ url: url })
     });
-    // no-cors 响应可能是 opaque，直接读取会失败；退化到 <img> 画布
-  } catch (e) {}
-  return await imageToDataUrl(url).catch(() => '');
+    
+    if (response.ok) {
+      const data = await response.json();
+      if (data.base64_data) {
+        // 构造完整的data URL
+        return `data:${data.content_type || 'image/png'};base64,${data.base64_data}`;
+      }
+    }
+  } catch (e) {
+    console.warn('外部服务获取图标失败:', e);
+  }
+  
+  // 外部服务失败时返回空字符串
+  return '';
 }
 
-function imageToDataUrl(url) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      try {
-        const canvas = document.createElement('canvas');
-        const size = 64;
-        canvas.width = size;
-        canvas.height = size;
-        const ctx = canvas.getContext('2d');
-        ctx.clearRect(0, 0, size, size);
-        // draw contain
-        const ratio = Math.min(size / img.width, size / img.height);
-        const w = img.width * ratio;
-        const h = img.height * ratio;
-        ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
-        resolve(canvas.toDataURL('image/png'));
-      } catch (err) {
-        reject(err);
-      }
-    };
-    img.onerror = reject;
-    img.src = url;
-  });
-}
 
 // 回退逻辑恢复为 origin + /favicon.ico
 

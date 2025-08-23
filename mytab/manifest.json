@@ -13,6 +13,9 @@
     "unlimitedStorage",
     "bookmarks"
   ],
+  "host_permissions": [
+    "https://mt.agnet.top/*"
+  ],
   "optional_host_permissions": [
     "*://*/*"
   ],
