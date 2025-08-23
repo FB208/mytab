@@ -1,9 +1,4 @@
 {
-  "functions": {
-    "api/favicon.js": {
-      "runtime": "nodejs18.x"
-    }
-  },
   "redirects": [
     { "source": "/", "destination": "/mytab/index.html", "permanent": false },
     { "source": "/options", "destination": "/mytab/options.html", "permanent": false }
