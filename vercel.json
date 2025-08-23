@@ -1,9 +1,4 @@
 {
-  "functions": {
-    "api/favicon.js": {
-      "runtime": "@vercel/node@3.0.0"
-    }
-  },
   "redirects": [
     { "source": "/", "destination": "/mytab/index.html", "permanent": false },
     { "source": "/options", "destination": "/mytab/options.html", "permanent": false }
