@@ -446,6 +446,63 @@ export async function moveFolder(folderId, newParentId) {
 }
 
 /**
+ * 移动文件夹到根目录的指定位置
+ * @param {string} folderId - 要移动的文件夹ID
+ * @param {string} targetFolderId - 参考位置的文件夹ID
+ * @param {string} position - 插入位置：'before' 或 'after'
+ * @returns {Promise<boolean>} 移动是否成功
+ */
+export async function moveFolderToRootPosition(folderId, targetFolderId, position = 'after') {
+  const data = await readData();
+  
+  // 找到要移动的文件夹
+  const folder = findFolderById(data.folders, folderId);
+  if (!folder) return false;
+  
+  // 找到目标文件夹在根级别的位置
+  const rootFolders = data.folders.filter(f => !f.parentId);
+  const targetIndex = rootFolders.findIndex(f => f.id === targetFolderId);
+  if (targetIndex < 0) return false;
+  
+  // 找到目标文件夹在data.folders中的实际位置
+  const targetDataIndex = data.folders.findIndex(f => f.id === targetFolderId);
+  if (targetDataIndex < 0) return false;
+
+  // 从原位置移除
+  function removeFromArray(folders) {
+    for (let i = 0; i < folders.length; i++) {
+      if (folders[i].id === folderId) {
+        folders.splice(i, 1);
+        return true;
+      }
+      if (folders[i].children && removeFromArray(folders[i].children)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  if (!removeFromArray(data.folders)) return false;
+
+  // 更新父ID为null（移动到根级别）
+  folder.parentId = null;
+
+  // 计算插入位置
+  let insertIndex = targetDataIndex;
+  if (position === 'after') {
+    insertIndex = targetDataIndex + 1;
+  }
+  
+  // 插入到指定位置
+  data.folders.splice(insertIndex, 0, folder);
+
+  data.lastModified = Date.now();
+  await writeData(data);
+  notifyChanged();
+  return true;
+}
+
+/**
  * ===========================================
  * 业务操作：书签管理
  * ===========================================

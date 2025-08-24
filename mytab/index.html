@@ -220,6 +220,37 @@
     </div>
   </div>
 
+  <!-- 移动目标选择弹窗 -->
+  <div id="move-modal" class="modal hidden">
+    <div class="panel glass" style="width: 400px; max-height: 78vh;">
+      <div class="inner" style="padding: 12px;">
+        <div style="display:flex; align-items:center; justify-content: space-between; margin-bottom: 8px;">
+          <h3 id="move-title" style="margin: 0; font-size: 15px;">移动到</h3>
+          <button id="move-close" class="icon-btn">✕</button>
+        </div>
+        
+        <!-- 根目录选项 -->
+        <div id="move-root-option" class="move-folder-option" data-folder-id="root" style="margin-bottom: 4px;">
+          <div class="move-folder-icon">🏠</div>
+          <div class="move-folder-info">
+            <div class="move-folder-name">根目录</div>
+            <div class="move-folder-path">一级文件夹</div>
+          </div>
+        </div>
+        
+        <!-- 文件夹树 -->
+        <div id="move-folder-tree" class="move-folder-tree" style="max-height: 380px; overflow-y: auto; margin-bottom: 8px;">
+          <!-- 动态生成的文件夹树 -->
+        </div>
+        
+        <div style="display:flex; justify-content:flex-end; gap:8px;">
+          <button id="move-cancel" class="ghost-btn" style="padding: 5px 10px; font-size: 13px;">取消</button>
+          <button id="move-confirm" class="primary-btn" style="padding: 5px 10px; font-size: 13px;" disabled>移动</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- 新版引导系统 -->
   <div id="guide-overlay" class="guide-overlay hidden">
     <!-- 高亮框 -->

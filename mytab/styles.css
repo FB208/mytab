@@ -912,3 +912,176 @@ textarea,
     padding: 4px 8px;
   }
 }
+
+/* 移动目标选择弹窗样式 */
+.move-folder-option {
+  display: flex;
+  align-items: center;
+  padding: 6px 10px;
+  margin: 1px 0;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: 1px solid transparent;
+  background: rgba(255,255,255,0.5);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+
+.move-folder-option:hover {
+  background: rgba(78,168,222,0.12);
+  border-color: rgba(78,168,222,0.3);
+}
+
+.move-folder-option.selected {
+  background: rgba(78,168,222,0.2);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(78,168,222,0.3);
+}
+
+.move-folder-option.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: rgba(200,200,200,0.3);
+}
+
+.move-folder-option.disabled:hover {
+  background: rgba(200,200,200,0.3);
+  border-color: transparent;
+}
+
+.move-folder-icon {
+  font-size: 14px;
+  margin-right: 8px;
+  min-width: 16px;
+  text-align: center;
+}
+
+.move-folder-info {
+  flex: 1;
+  min-width: 0; /* 允许文本截断 */
+}
+
+.move-folder-name {
+  font-weight: 500;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.2;
+  margin-bottom: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.move-folder-path {
+  font-size: 10px;
+  color: var(--text-dim);
+  opacity: 0.65;
+  line-height: 1.1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.move-folder-tree {
+  border: 1px solid rgba(203,213,225,0.3);
+  border-radius: 6px;
+  background: rgba(255,255,255,0.15);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  padding: 2px;
+}
+
+/* 移动弹窗滚动条样式 - 与搜索列表保持一致 */
+.move-folder-tree::-webkit-scrollbar {
+  width: 10px;
+}
+
+.move-folder-tree::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  box-shadow: inset 2px 2px 4px rgba(0, 0, 0, 0.08), 
+              inset -2px -2px 4px rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.move-folder-tree::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, 
+    rgba(255, 255, 255, 0.7) 0%, 
+    rgba(255, 255, 255, 0.5) 50%, 
+    rgba(240, 240, 240, 0.6) 100%);
+  border-radius: 8px;
+  box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.1), 
+              -1px -1px 3px rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+
+.move-folder-tree::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, 
+    rgba(255, 255, 255, 0.8) 0%, 
+    rgba(255, 255, 255, 0.6) 50%, 
+    rgba(245, 245, 245, 0.7) 100%);
+  box-shadow: 1px 1px 4px rgba(0, 0, 0, 0.15), 
+              -1px -1px 4px rgba(255, 255, 255, 0.9);
+}
+
+.move-folder-tree::-webkit-scrollbar-thumb:active {
+  background: linear-gradient(135deg, 
+    rgba(240, 240, 240, 0.7) 0%, 
+    rgba(255, 255, 255, 0.5) 50%, 
+    rgba(230, 230, 230, 0.6) 100%);
+  box-shadow: inset 1px 1px 3px rgba(0, 0, 0, 0.12),
+              inset -1px -1px 3px rgba(255, 255, 255, 0.6);
+}
+
+/* 文件夹树层级缩进 - 极致紧凑的缩进 */
+.move-folder-option[data-level="0"] { padding-left: 10px; }
+.move-folder-option[data-level="1"] { padding-left: 20px; }
+.move-folder-option[data-level="2"] { padding-left: 30px; }
+.move-folder-option[data-level="3"] { padding-left: 40px; }
+.move-folder-option[data-level="4"] { padding-left: 50px; }
+.move-folder-option[data-level="5"] { padding-left: 60px; }
+
+/* 移动弹窗响应式 */
+@media (max-width: 768px) {
+  #move-modal .panel {
+    width: 95vw !important;
+    max-height: 85vh !important;
+  }
+  
+  #move-modal .inner {
+    padding: 10px !important;
+  }
+  
+  .move-folder-tree {
+    max-height: 45vh !important;
+  }
+  
+  .move-folder-option {
+    padding: 8px 6px !important;
+  }
+  
+  .move-folder-name {
+    font-size: 13px !important;
+  }
+  
+  .move-folder-path {
+    font-size: 10px !important;
+  }
+  
+  .move-folder-icon {
+    font-size: 13px !important;
+    margin-right: 6px !important;
+    min-width: 14px !important;
+  }
+  
+  /* 移动端层级缩进更紧凑 */
+  .move-folder-option[data-level="0"] { padding-left: 6px !important; }
+  .move-folder-option[data-level="1"] { padding-left: 16px !important; }
+  .move-folder-option[data-level="2"] { padding-left: 26px !important; }
+  .move-folder-option[data-level="3"] { padding-left: 36px !important; }
+  .move-folder-option[data-level="4"] { padding-left: 46px !important; }
+  .move-folder-option[data-level="5"] { padding-left: 56px !important; }
+}

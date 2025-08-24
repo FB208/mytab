@@ -5,6 +5,7 @@ import {
   renameFolder,
   deleteFolder,
   moveFolder,
+  moveFolderToRootPosition,
   addBookmark,
   deleteBookmark,
   buildFaviconUrl,
@@ -454,14 +455,13 @@ async function renderFolderList() {
         const moveFolderId = dragData.replace('folder:', '');
         const movingFolder = findFolderById(data.folders, moveFolderId);
         
-        // 只有同级一级文件夹才支持排序
-        if (movingFolder && !movingFolder.parentId && !folder.parentId && moveFolderId !== folder.id) {
+        if (movingFolder && moveFolderId !== folder.id) {
           if (clientY < centerY - threshold) {
-            // 上方区域：排序到前面
+            // 上方区域：排序到前面（如果是同级一级文件夹）或移动到根目录
             el.classList.add('drag-over-top');
             ev.dataTransfer.dropEffect = 'move';
           } else if (clientY > centerY + threshold) {
-            // 下方区域：排序到后面
+            // 下方区域：排序到后面（如果是同级一级文件夹）或移动到根目录
             el.classList.add('drag-over-bottom');
             ev.dataTransfer.dropEffect = 'move';
           } else {
@@ -497,17 +497,18 @@ async function renderFolderList() {
         if (moveFolderId === folder.id) return; // 不能拖拽到自己
         
         const movingFolder = findFolderById(data.folders, moveFolderId);
+        if (!movingFolder) return; // 移动的文件夹不存在
         
-        // 检查是否是同级一级文件夹之间的排序
-        if (movingFolder && !movingFolder.parentId && !folder.parentId) {
-          // 判断拖拽区域决定操作类型
-          const rect = el.getBoundingClientRect();
-          const clientY = ev.clientY;
-          const centerY = rect.top + rect.height / 2;
-          const threshold = rect.height * 0.25;
-          
-          if (clientY < centerY - threshold || clientY > centerY + threshold) {
-            // 上方或下方区域：执行排序
+        // 判断拖拽区域决定操作类型
+        const rect = el.getBoundingClientRect();
+        const clientY = ev.clientY;
+        const centerY = rect.top + rect.height / 2;
+        const threshold = rect.height * 0.25;
+        
+        if (clientY < centerY - threshold || clientY > centerY + threshold) {
+          // 上方或下方区域
+          if (!movingFolder.parentId && !folder.parentId) {
+            // 同级一级文件夹：执行排序
             const ok = await reorderFolders({
               sourceId: moveFolderId,
               targetId: folder.id
@@ -516,8 +517,9 @@ async function renderFolderList() {
               renderFolderList();
             }
           } else {
-            // 中间区域：执行移动
-            const ok = await moveFolder(moveFolderId, folder.id);
+            // 非同级文件夹：移动到根目录的指定位置
+            const position = clientY < centerY - threshold ? 'before' : 'after';
+            const ok = await moveFolderToRootPosition(moveFolderId, folder.id, position);
             if (ok) {
               renderFolderList();
               renderSubfolders();
@@ -525,7 +527,7 @@ async function renderFolderList() {
             }
           }
         } else {
-          // 不同级文件夹：只能移动
+          // 中间区域：移动到文件夹内部
           const ok = await moveFolder(moveFolderId, folder.id);
           if (ok) {
             renderFolderList();
@@ -578,6 +580,12 @@ async function renderFolderList() {
               await renameFolder(folder.id, name);
               render();
             }
+          }
+        },
+        {
+          label: '移动',
+          onClick: async () => {
+            await showMoveModal('folder', folder.id, null, folder.name);
           }
         },
         {
@@ -717,8 +725,72 @@ async function renderBookmarkGrid() {
         renderBookmarkGrid();
       }
     });
-    // 返回项不参与拖拽
+    // 返回项不参与拖拽，但可以作为拖拽目标
     backEl.setAttribute('draggable', 'false');
+    
+    // 添加拖拽目标功能：可以接收书签和文件夹的拖拽
+    backEl.addEventListener('dragover', (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      
+      // 添加拖拽高亮样式
+      backEl.classList.add('drag-over-center');
+      ev.dataTransfer.dropEffect = 'move';
+    });
+    
+    backEl.addEventListener('dragleave', (ev) => {
+      // 只有真正离开元素时才移除样式
+      if (!backEl.contains(ev.relatedTarget)) {
+        backEl.classList.remove('drag-over-center');
+      }
+    });
+    
+    backEl.addEventListener('drop', async (ev) => {
+      console.log('back drop', ev);
+      ev.preventDefault();
+      ev.stopPropagation();
+      backEl.classList.remove('drag-over-center');
+      
+      const dragData = ev.dataTransfer.getData('text/plain');
+      if (!dragData) return;
+      
+      const parentFolderId = currentFolder.parentId;
+      if (!parentFolderId) return; // 没有父文件夹
+      
+      // 处理文件夹拖拽到返回上级
+      if (dragData.startsWith('folder:')) {
+        const moveFolderId = dragData.replace('folder:', '');
+        if (moveFolderId === currentFolder.id) return; // 不能移动当前文件夹
+        
+        const ok = await moveFolder(moveFolderId, parentFolderId);
+        if (ok) {
+          renderFolderList();
+          renderSubfolders();
+          renderBookmarkGrid();
+        }
+        return;
+      }
+      
+      // 处理书签拖拽到返回上级
+      if (dragData.startsWith('bookmark:')) {
+        const parts = dragData.split(':');
+        if (parts.length >= 3) {
+          const bookmarkId = parts[1];
+          const sourceFolderId = parts[2];
+          
+          const ok = await moveBookmark({
+            sourceFolderId,
+            bookmarkId,
+            targetFolderId: parentFolderId
+          });
+          if (ok) {
+            renderBookmarkGrid();
+          }
+        }
+        return;
+      }
+    });
+    
     grid.appendChild(backEl);
   }
   
@@ -898,6 +970,49 @@ async function renderBookmarkGrid() {
         renderBookmarkGrid();
       });
       
+      // 添加右键菜单
+      el.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        openContextMenu(e.clientX, e.clientY, [{
+            label: '重命名',
+            onClick: async () => {
+              const name = await textPrompt({
+                title: '重命名文件夹',
+                placeholder: subfolder.name,
+                value: subfolder.name
+              });
+              if (name) {
+                await renameFolder(subfolder.id, name);
+                renderBookmarkGrid();
+              }
+            }
+          },
+          {
+            label: '移动',
+            onClick: async () => {
+              await showMoveModal('folder', subfolder.id, null, subfolder.name);
+            }
+          },
+          {
+            label: '删除',
+            onClick: async () => {
+              const ok = await confirmPrompt('确认删除该文件夹及其内容？');
+              if (ok) {
+                await deleteFolder(subfolder.id);
+                // 如果删除的是当前选中的文件夹，返回到父文件夹
+                if (state.selectedFolderId === subfolder.id) {
+                  state.selectedFolderId = currentFolder.id;
+                  updateCurrentPath(data);
+                }
+                renderFolderList();
+                renderSubfolders();
+                renderBookmarkGrid();
+              }
+            }
+          }
+        ]);
+      });
+      
       grid.appendChild(el);
     });
   
@@ -1048,6 +1163,12 @@ async function renderBookmarkGrid() {
             },
             folderId: state.selectedFolderId
           })
+        },
+        {
+          label: '移动',
+          onClick: async () => {
+            await showMoveModal('bookmark', bm.id, state.selectedFolderId, bm.name || bm.url);
+          }
         },
         {
           label: '删除',
@@ -2230,4 +2351,259 @@ function hideGlobalLoading() {
     // 恢复页面滚动
     document.body.style.overflow = '';
   }
+}
+
+// ===============================
+// 移动功能相关函数
+// ===============================
+
+// 移动弹窗状态
+let moveModalContext = {
+  type: null, // 'folder' 或 'bookmark'
+  sourceId: null,
+  sourceFolderId: null, // 对于书签，记录源文件夹ID
+  selectedTargetId: null // 选中的目标文件夹ID
+};
+
+/**
+ * 显示移动目标选择弹窗
+ * @param {string} type - 移动类型：'folder' 或 'bookmark'
+ * @param {string} sourceId - 源对象ID
+ * @param {string} sourceFolderId - 源文件夹ID（书签专用）
+ * @param {string} itemName - 要移动的项目名称
+ */
+async function showMoveModal(type, sourceId, sourceFolderId = null, itemName = '') {
+  moveModalContext = {
+    type,
+    sourceId,
+    sourceFolderId,
+    selectedTargetId: null
+  };
+  
+  const modal = document.getElementById('move-modal');
+  const backdrop = document.getElementById('modal-backdrop');
+  const title = document.getElementById('move-title');
+  const confirmBtn = document.getElementById('move-confirm');
+  
+  // 设置标题
+  const typeText = type === 'folder' ? '文件夹' : '书签';
+  title.textContent = `移动${typeText}`;
+  
+  // 禁用确认按钮
+  confirmBtn.disabled = true;
+  confirmBtn.textContent = '移动';
+  
+  // 渲染文件夹树
+  await renderMoveFolderTree();
+  
+  // 显示弹窗
+  modal.classList.remove('hidden');
+  backdrop.classList.remove('hidden');
+  
+  // 绑定事件
+  bindMoveModalEvents();
+}
+
+/**
+ * 渲染移动文件夹树
+ */
+async function renderMoveFolderTree() {
+  const { data } = await readAll();
+  const treeContainer = document.getElementById('move-folder-tree');
+  const rootOption = document.getElementById('move-root-option');
+  
+  treeContainer.innerHTML = '';
+  
+  // 根目录选项处理
+  if (moveModalContext.type === 'folder') {
+    const sourceFolder = findFolderById(data.folders, moveModalContext.sourceId);
+    rootOption.style.display = 'block'; // 确保显示
+    rootOption.classList.remove('disabled');
+    // 如果是一级文件夹，禁用根目录选项
+    if (sourceFolder && !sourceFolder.parentId) {
+      rootOption.classList.add('disabled');
+      rootOption.title = '一级文件夹不能移动到根目录';
+    } else {
+      rootOption.classList.remove('disabled');
+      rootOption.title = '移动到根目录（成为一级文件夹）';
+    }
+  } else {
+    // 书签不能移动到根目录，隐藏根目录选项
+    rootOption.style.display = 'none';
+  }
+  
+  // 渲染文件夹树
+  await renderFolderTreeRecursive(data.folders, treeContainer, 0);
+}
+
+/**
+ * 递归渲染文件夹树
+ */
+async function renderFolderTreeRecursive(folders, container, level) {
+  for (const folder of folders) {
+    // 跳过要移动的文件夹自身及其子文件夹
+    if (moveModalContext.type === 'folder') {
+      if (folder.id === moveModalContext.sourceId) continue;
+      // 检查是否是要移动文件夹的子文件夹
+      if (await isDescendant(folder.id, moveModalContext.sourceId)) continue;
+    }
+    
+    const option = createFolderOption(folder, level);
+    container.appendChild(option);
+    
+    // 递归渲染子文件夹
+    if (folder.children && folder.children.length > 0) {
+      await renderFolderTreeRecursive(folder.children, container, level + 1);
+    }
+  }
+}
+
+/**
+ * 检查是否是指定文件夹的后代
+ */
+async function isDescendant(folderId, ancestorId) {
+  const { data } = await readAll();
+  const path = getFolderPath(data.folders, folderId);
+  return path.some(f => f.id === ancestorId);
+}
+
+/**
+ * 创建文件夹选项元素
+ */
+function createFolderOption(folder, level) {
+  const option = document.createElement('div');
+  option.className = 'move-folder-option';
+  option.dataset.folderId = folder.id;
+  option.dataset.level = level;
+  
+  // 构建路径显示
+  const pathParts = [];
+  if (level === 0) {
+    pathParts.push('一级文件夹');
+  } else {
+    // 这里可以根据需要显示完整路径
+    pathParts.push(`${level + 1}级文件夹`);
+  }
+  
+  option.innerHTML = `
+    <div class="move-folder-icon">${folder.icon || '📁'}</div>
+    <div class="move-folder-info">
+      <div class="move-folder-name">${folder.name}</div>
+      <div class="move-folder-path">${pathParts.join(' > ')}</div>
+    </div>
+  `;
+  
+  // 添加点击事件
+  option.addEventListener('click', () => selectMoveTarget(folder.id, option));
+  
+  return option;
+}
+
+/**
+ * 选择移动目标
+ */
+function selectMoveTarget(targetId, optionElement) {
+  // 移除所有选中状态
+  document.querySelectorAll('.move-folder-option').forEach(el => {
+    el.classList.remove('selected');
+  });
+  
+  // 设置新的选中状态
+  optionElement.classList.add('selected');
+  moveModalContext.selectedTargetId = targetId;
+  
+  // 启用确认按钮
+  const confirmBtn = document.getElementById('move-confirm');
+  confirmBtn.disabled = false;
+}
+
+/**
+ * 绑定移动弹窗事件（只绑定一次）
+ */
+let moveModalEventsBound = false;
+function bindMoveModalEvents() {
+  if (moveModalEventsBound) return; // 防止重复绑定
+  moveModalEventsBound = true;
+  
+  const modal = document.getElementById('move-modal');
+  const backdrop = document.getElementById('modal-backdrop');
+  const closeBtn = document.getElementById('move-close');
+  const cancelBtn = document.getElementById('move-cancel');
+  const confirmBtn = document.getElementById('move-confirm');
+  const rootOption = document.getElementById('move-root-option');
+  
+  // 关闭事件
+  const closeModal = () => {
+    modal.classList.add('hidden');
+    backdrop.classList.add('hidden');
+    // 清理选中状态
+    document.querySelectorAll('.move-folder-option').forEach(el => {
+      el.classList.remove('selected');
+    });
+    moveModalContext = { type: null, sourceId: null, sourceFolderId: null, selectedTargetId: null };
+  };
+  
+  closeBtn.onclick = closeModal;
+  cancelBtn.onclick = closeModal;
+  
+  // 根目录选项点击
+  rootOption.onclick = () => {
+    if (rootOption.classList.contains('disabled')) return;
+    
+    // 移除所有选中状态
+    document.querySelectorAll('.move-folder-option').forEach(el => {
+      el.classList.remove('selected');
+    });
+    
+    // 选中根目录
+    rootOption.classList.add('selected');
+    moveModalContext.selectedTargetId = 'root';
+    
+    const confirmBtn = document.getElementById('move-confirm');
+    confirmBtn.disabled = false;
+  };
+  
+  // 确认移动
+  confirmBtn.onclick = async () => {
+    if (!moveModalContext.selectedTargetId) return;
+    
+    const success = await performMove();
+    if (success) {
+      closeModal();
+      // 刷新界面
+      renderFolderList();
+      renderSubfolders();
+      renderBookmarkGrid();
+      toast('✅ 移动成功', 1500);
+    } else {
+      toast('❌ 移动失败', 2000);
+    }
+  };
+}
+
+/**
+ * 执行移动操作
+ */
+async function performMove() {
+  const { type, sourceId, sourceFolderId, selectedTargetId } = moveModalContext;
+  
+  if (type === 'folder') {
+    // 移动文件夹
+    const newParentId = selectedTargetId === 'root' ? null : selectedTargetId;
+    return await moveFolder(sourceId, newParentId);
+  } else if (type === 'bookmark') {
+    // 移动书签
+    const targetFolderId = selectedTargetId === 'root' ? null : selectedTargetId;
+    if (!targetFolderId) {
+      toast('❌ 书签不能移动到根目录', 2000);
+      return false;
+    }
+    return await moveBookmark({
+      sourceFolderId: sourceFolderId,
+      bookmarkId: sourceId,
+      targetFolderId: targetFolderId
+    });
+  }
+  
+  return false;
 }
