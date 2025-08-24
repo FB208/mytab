@@ -1492,13 +1492,12 @@ async function handleModalSave() {
   if (modalCtx.mode === 'add') {
     if (mode === 'favicon') {
       const iconUrl = modal.favUrl.value.trim() || modalFavCandidates[0] || buildFaviconUrl(url);
-      const iconDataUrl = iconUrl ? await toDataUrlSafe(iconUrl) : '';
       await addBookmark({
         folderId,
         url,
         name,
         iconUrl,
-        iconDataUrl,
+        iconDataUrl: '', // 保存时不获取base64，改为懒加载
         mono: null,
         remark
       });
@@ -1521,7 +1520,6 @@ async function handleModalSave() {
     const bookmarkId = modalCtx.bookmarkId;
     if (mode === 'favicon') {
       const iconUrl = modal.favUrl.value.trim() || modalFavCandidates[0] || undefined;
-      const iconDataUrl = iconUrl ? await toDataUrlSafe(iconUrl) : '';
       await updateBookmark({
         folderId,
         bookmarkId,
@@ -1529,7 +1527,7 @@ async function handleModalSave() {
         name,
         iconType: 'favicon',
         iconUrl,
-        iconDataUrl
+        iconDataUrl: '' // 编辑时也不获取base64，改为懒加载
       });
     } else {
       const letter = (modal.letter.value || (name || url || 'W')[0] || 'W').toUpperCase();
