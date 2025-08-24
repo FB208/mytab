@@ -920,12 +920,74 @@ textarea,
   padding: 6px 10px;
   margin: 1px 0;
   border-radius: 6px;
-  cursor: pointer;
   transition: all 0.15s ease;
   border: 1px solid transparent;
   background: rgba(255,255,255,0.5);
   backdrop-filter: blur(2px);
   -webkit-backdrop-filter: blur(2px);
+}
+
+/* 展开图标样式 - 带边框的方形符号 */
+.expand-icon {
+  width: 15px;
+  height: 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: normal;
+  color: #555;
+  background: rgba(255,255,255,0.9);
+  border: 1px solid rgba(0,0,0,0.2);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-right: 6px;
+  border-radius: 2px;
+  user-select: none;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+}
+
+.expand-icon:hover {
+  background: rgba(255,255,255,0.95);
+  border-color: rgba(0,0,0,0.25);
+  color: #333;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.expand-icon.empty {
+  cursor: default;
+  opacity: 0;
+}
+
+/* 文件夹信息区域，可点击选择 */
+.move-folder-info {
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: background 0.15s ease;
+}
+
+.move-folder-info:hover {
+  background: rgba(78,168,222,0.08);
+}
+
+/* 为有子文件夹的文件夹信息区域添加双击提示 */
+.move-folder-info.has-children {
+  position: relative;
+}
+
+.move-folder-info.has-children:hover::after {
+  content: "双击展开";
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 9px;
+  color: var(--text-dim);
+  opacity: 0.6;
+  pointer-events: none;
 }
 
 .move-folder-option:hover {
@@ -937,6 +999,10 @@ textarea,
   background: rgba(78,168,222,0.2);
   border-color: var(--primary);
   box-shadow: 0 0 0 2px rgba(78,168,222,0.3);
+}
+
+.move-folder-info.selected {
+  background: rgba(78,168,222,0.15);
 }
 
 .move-folder-option.disabled {
@@ -957,10 +1023,6 @@ textarea,
   text-align: center;
 }
 
-.move-folder-info {
-  flex: 1;
-  min-width: 0; /* 允许文本截断 */
-}
 
 .move-folder-name {
   font-weight: 500;

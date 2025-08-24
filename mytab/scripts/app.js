@@ -2404,13 +2404,23 @@ async function showMoveModal(type, sourceId, sourceFolderId = null, itemName = '
   bindMoveModalEvents();
 }
 
+// 渐进式文件夹树状态
+let folderTreeState = {
+  expandedFolders: new Set(), // 已展开的文件夹ID
+  currentLevel: 0 // 当前显示层级
+};
+
 /**
- * 渲染移动文件夹树
+ * 渲染移动文件夹树（渐进式）
  */
 async function renderMoveFolderTree() {
   const { data } = await readAll();
   const treeContainer = document.getElementById('move-folder-tree');
   const rootOption = document.getElementById('move-root-option');
+  
+  // 重置树状态
+  folderTreeState.expandedFolders.clear();
+  folderTreeState.currentLevel = 0;
   
   treeContainer.innerHTML = '';
   
@@ -2432,14 +2442,28 @@ async function renderMoveFolderTree() {
     rootOption.style.display = 'none';
   }
   
-  // 渲染文件夹树
-  await renderFolderTreeRecursive(data.folders, treeContainer, 0);
+  // 渐进式渲染文件夹树 - 只显示一级文件夹
+  await renderProgressiveFolderTree(data.folders, treeContainer);
 }
 
 /**
- * 递归渲染文件夹树
+ * 渐进式渲染文件夹树
  */
-async function renderFolderTreeRecursive(folders, container, level) {
+async function renderProgressiveFolderTree(allFolders, container) {
+  // 清空容器
+  container.innerHTML = '';
+  
+  // 获取根级文件夹（parentId为null的文件夹）
+  const rootFolders = allFolders.filter(f => !f.parentId);
+  
+  // 渲染根级文件夹
+  await renderProgressiveFolderLevel(rootFolders, container, 0);
+}
+
+/**
+ * 渲染文件夹层级（渐进式展开）
+ */
+async function renderProgressiveFolderLevel(folders, container, level) {
   for (const folder of folders) {
     // 跳过要移动的文件夹自身及其子文件夹
     if (moveModalContext.type === 'folder') {
@@ -2448,12 +2472,12 @@ async function renderFolderTreeRecursive(folders, container, level) {
       if (await isDescendant(folder.id, moveModalContext.sourceId)) continue;
     }
     
-    const option = createFolderOption(folder, level);
+    const option = createProgressiveFolderOption(folder, level);
     container.appendChild(option);
     
-    // 递归渲染子文件夹
-    if (folder.children && folder.children.length > 0) {
-      await renderFolderTreeRecursive(folder.children, container, level + 1);
+    // 如果文件夹已展开，渲染其子文件夹
+    if (folderTreeState.expandedFolders.has(folder.id) && folder.children && folder.children.length > 0) {
+      await renderProgressiveFolderLevel(folder.children, container, level + 1);
     }
   }
 }
@@ -2468,24 +2492,39 @@ async function isDescendant(folderId, ancestorId) {
 }
 
 /**
- * 创建文件夹选项元素
+ * 创建渐进式文件夹选项元素
  */
-function createFolderOption(folder, level) {
+function createProgressiveFolderOption(folder, level) {
   const option = document.createElement('div');
   option.className = 'move-folder-option';
   option.dataset.folderId = folder.id;
   option.dataset.level = level;
+  
+  // 检查是否有子文件夹
+  const hasChildren = folder.children && folder.children.length > 0;
+  const isExpanded = folderTreeState.expandedFolders.has(folder.id);
+  
   
   // 构建路径显示
   const pathParts = [];
   if (level === 0) {
     pathParts.push('一级文件夹');
   } else {
-    // 这里可以根据需要显示完整路径
     pathParts.push(`${level + 1}级文件夹`);
   }
   
+  // 添加展开/收起图标 - 使用清晰的方形符号
+  let expandIcon = '';
+  if (hasChildren) {
+    const iconClass = isExpanded ? 'expanded' : 'collapsed';
+    const iconSymbol = isExpanded ? '⊟' : '⊞';
+    expandIcon = `<span class="expand-icon ${iconClass}">${iconSymbol}</span>`;
+  } else {
+    expandIcon = '<span class="expand-icon empty"></span>';
+  }
+  
   option.innerHTML = `
+    ${expandIcon}
     <div class="move-folder-icon">${folder.icon || '📁'}</div>
     <div class="move-folder-info">
       <div class="move-folder-name">${folder.name}</div>
@@ -2493,10 +2532,68 @@ function createFolderOption(folder, level) {
     </div>
   `;
   
-  // 添加点击事件
-  option.addEventListener('click', () => selectMoveTarget(folder.id, option));
+  // 添加点击事件 - 区分展开和选择
+  const expandIconEl = option.querySelector('.expand-icon');
+  const folderInfoEl = option.querySelector('.move-folder-info');
+  
+  // 为有子文件夹的文件夹信息区域添加类
+  if (hasChildren) {
+    folderInfoEl.classList.add('has-children');
+  }
+  
+  // 展开/收起事件（点击箭头）
+  if (hasChildren && expandIconEl) {
+    expandIconEl.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      await toggleFolderExpansion(folder.id);
+    });
+  }
+  
+  // 选择文件夹事件（点击文件夹信息区域）
+  folderInfoEl.addEventListener('click', (e) => {
+    e.stopPropagation();
+    selectMoveTarget(folder.id, option);
+  });
+  
+  // 双击展开/折叠功能
+  if (hasChildren) {
+    folderInfoEl.addEventListener('dblclick', async (e) => {
+      e.stopPropagation();
+      await toggleFolderExpansion(folder.id);
+    });
+  }
   
   return option;
+}
+
+/**
+ * 切换文件夹展开状态
+ */
+async function toggleFolderExpansion(folderId) {
+  const { data } = await readAll();
+  
+  if (folderTreeState.expandedFolders.has(folderId)) {
+    // 收起文件夹
+    folderTreeState.expandedFolders.delete(folderId);
+  } else {
+    // 展开文件夹
+    folderTreeState.expandedFolders.add(folderId);
+  }
+  
+  // 保存当前选中状态
+  const currentSelected = moveModalContext.selectedTargetId;
+  
+  // 重新渲染文件夹树
+  const treeContainer = document.getElementById('move-folder-tree');
+  await renderProgressiveFolderTree(data.folders, treeContainer);
+  
+  // 恢复选中状态
+  if (currentSelected) {
+    const selectedOption = document.querySelector(`.move-folder-option[data-folder-id="${currentSelected}"]`);
+    if (selectedOption) {
+      selectMoveTarget(currentSelected, selectedOption);
+    }
+  }
 }
 
 /**
@@ -2506,10 +2603,15 @@ function selectMoveTarget(targetId, optionElement) {
   // 移除所有选中状态
   document.querySelectorAll('.move-folder-option').forEach(el => {
     el.classList.remove('selected');
+    const infoEl = el.querySelector('.move-folder-info');
+    if (infoEl) infoEl.classList.remove('selected');
   });
   
   // 设置新的选中状态
   optionElement.classList.add('selected');
+  const infoEl = optionElement.querySelector('.move-folder-info');
+  if (infoEl) infoEl.classList.add('selected');
+  
   moveModalContext.selectedTargetId = targetId;
   
   // 启用确认按钮
