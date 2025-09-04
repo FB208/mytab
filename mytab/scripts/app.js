@@ -21,6 +21,9 @@ import {
   getAllSubfolders,
   DEFAULT_BG_URL,
   isFirstTimeUser,
+  // iconData相关函数
+  getIconDataUrl,
+  setIconDataUrl,
   // 兼容性导入（已弃用的API）
   addSubfolder,
   renameSubfolder,
@@ -682,6 +685,58 @@ async function renderSubfolders() {
   return;
 }
 
+/**
+ * 异步渲染书签图标
+ * 从iconData缓存中获取base64数据，如果没有则先显示iconUrl，后续懒加载base64
+ * @param {HTMLElement} imgElement - 图片元素
+ * @param {HTMLElement} monoElement - 单色图标元素  
+ * @param {Object} bookmark - 书签对象
+ */
+async function renderBookmarkIcon(imgElement, monoElement, bookmark) {
+  if (bookmark.iconType === 'favicon' && bookmark.iconUrl) {
+    // 先尝试从缓存获取base64数据
+    const cachedDataUrl = await getIconDataUrl(bookmark.iconUrl);
+    
+    // 设置图片源，优先使用缓存的base64，否则使用iconUrl
+    imgElement.src = cachedDataUrl || bookmark.iconUrl;
+    imgElement.style.display = 'block';
+    monoElement.style.display = 'none';
+    
+    // 图片加载成功后，如果没有缓存的base64数据，则懒加载获取
+    imgElement.onload = async () => {
+      if (!cachedDataUrl && bookmark.iconUrl) {
+        try {
+          const dataUrl = await toDataUrlSafe(bookmark.iconUrl);
+          if (dataUrl) {
+            // 保存到缓存，不再更新书签数据
+            await setIconDataUrl(bookmark.iconUrl, dataUrl);
+            // 更新图片显示
+            imgElement.src = dataUrl;
+          }
+        } catch (e) {
+          console.warn('懒加载图标失败:', e);
+        }
+      }
+    };
+    
+    // 图片加载失败时显示临时单色图标
+    imgElement.onerror = () => {
+      imgElement.style.display = 'none';
+      monoElement.style.display = 'grid';
+      const letter = (bookmark.name || bookmark.url || 'W')[0] || 'W';
+      const color = pickColorFromString(letter);
+      monoElement.style.background = color;
+      monoElement.querySelector('.letter').textContent = letter.toUpperCase();
+    };
+  } else if (bookmark.mono) {
+    // 显示单色图标
+    monoElement.style.display = 'grid';
+    monoElement.style.background = bookmark.mono.color;
+    monoElement.querySelector('.letter').textContent = (bookmark.mono.letter || '?').toUpperCase();
+    imgElement.style.display = 'none';
+  }
+}
+
 async function renderBookmarkGrid() {
   const {
     data
@@ -1017,7 +1072,7 @@ async function renderBookmarkGrid() {
     });
   
   // "返回上级"按钮已经在最前面添加了，这里直接渲染书签
-  list.forEach(bm => {
+  for (const bm of list) {
     const el = tpl.content.firstElementChild.cloneNode(true);
     el.dataset.id = bm.id;
     el.title = bm.remark ? `${bm.name || bm.url}\n${bm.remark}` : (bm.name || bm.url);
@@ -1116,41 +1171,8 @@ async function renderBookmarkGrid() {
     });
     const img = el.querySelector('.favicon');
     const mono = el.querySelector('.mono-icon');
-    if (bm.iconType === 'favicon' && bm.iconUrl) {
-      img.src = bm.iconDataUrl || bm.iconUrl;
-      img.style.display = 'block';
-      mono.style.display = 'none';
-      img.onload = () => {
-        if (!bm.iconDataUrl && bm.iconUrl) {
-          toDataUrlSafe(bm.iconUrl).then((dataUrl) => {
-            if (dataUrl) updateBookmark({
-              folderId: state.selectedFolderId,
-              bookmarkId: bm.id,
-              url: bm.url,
-              name: bm.name,
-              iconType: 'favicon',
-              iconUrl: bm.iconUrl,
-              iconDataUrl: dataUrl
-            });
-          }).catch(() => {});
-        }
-      };
-      img.onerror = () => {
-        // 图标加载失败时显示临时单色图标，但不持久化
-        // 这样用户可以手动重试或者在网络恢复后重新加载
-        img.style.display = 'none';
-        mono.style.display = 'grid';
-        const letter = (bm.name || bm.url || 'W')[0] || 'W';
-        const color = pickColorFromString(letter);
-        mono.style.background = color;
-        mono.querySelector('.letter').textContent = letter.toUpperCase();
-      };
-    } else if (bm.mono) {
-      mono.style.display = 'grid';
-      mono.style.background = bm.mono.color;
-      mono.querySelector('.letter').textContent = (bm.mono.letter || '?').toUpperCase();
-      img.style.display = 'none';
-    }
+    // 使用新的异步图标渲染函数
+    await renderBookmarkIcon(img, mono, bm);
     el.addEventListener('click', () => window.open(bm.url, '_blank'));
     el.addEventListener('contextmenu', (e) => {
       e.preventDefault();
@@ -1186,7 +1208,7 @@ async function renderBookmarkGrid() {
       ]);
     });
     grid.appendChild(el);
-  });
+  }
 
   // Add the virtual "Add New" card
   if (state.selectedFolderId) {
@@ -1497,7 +1519,6 @@ async function handleModalSave() {
         url,
         name,
         iconUrl,
-        iconDataUrl: '', // 保存时不获取base64，改为懒加载
         mono: null,
         remark
       });
@@ -1526,8 +1547,7 @@ async function handleModalSave() {
         url,
         name,
         iconType: 'favicon',
-        iconUrl,
-        iconDataUrl: '' // 编辑时也不获取base64，改为懒加载
+        iconUrl
       });
     } else {
       const letter = (modal.letter.value || (name || url || 'W')[0] || 'W').toUpperCase();

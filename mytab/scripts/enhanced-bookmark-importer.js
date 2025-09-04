@@ -5,7 +5,7 @@
  */
 
 import { Semaphore, ProgressTracker } from './enhancement-utils.js';
-import { generateId } from './storage.js';
+import { generateId, setIconDataUrl } from './storage.js';
 
 /**
  * 增强书签导入器类
@@ -329,7 +329,6 @@ export class EnhancedBookmarkImporter {
       name: bookmark.title || '无标题书签', // 使用name字段而不是title
       iconType: 'favicon',
       iconUrl: '',
-      iconDataUrl: '',
       mono: null,
       remark: '',
       enhanced: false,
@@ -376,6 +375,11 @@ export class EnhancedBookmarkImporter {
         enhancedBookmark.iconType = 'favicon';
         enhancedBookmark.iconUrl = iconResult[0];
         iconSuccess = true;
+        
+        // 尝试预先获取并缓存base64数据，但不阻塞主流程
+        this._preloadIconToCache(iconResult[0]).catch(() => {
+          // 静默忽略预加载失败，不影响书签导入
+        });
       }
     } catch (error) {
       this._recordError(bookmark.url, error, 'favicon');
@@ -994,6 +998,55 @@ export class EnhancedBookmarkImporter {
       
       this.lastConcurrencyAdjustment = now;
       console.log(`动态并发调整: ${currentConcurrency} -> ${newConcurrency} (失败率: ${(failureRate * 100).toFixed(1)}%)`);
+    }
+  }
+
+  /**
+   * 预加载图标到缓存
+   * 在后台异步获取图标的base64数据并存储到iconData缓存中
+   * @param {string} iconUrl - 图标URL
+   * @returns {Promise<void>}
+   * @private
+   */
+  async _preloadIconToCache(iconUrl) {
+    if (!iconUrl) return;
+    
+    try {
+      // 检查是否为扩展环境
+      if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+        // 扩展模式：使用外部API服务
+        const apiUrl = 'https://mt.agnet.top/image/url-to-base64';
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: iconUrl })
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.base64_data) {
+            const dataUrl = `data:${data.content_type || 'image/png'};base64,${data.base64_data}`;
+            await setIconDataUrl(iconUrl, dataUrl);
+          }
+        }
+      } else {
+        // Web模式：使用代理API
+        const response = await fetch('/api/favicon', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: iconUrl })
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.base64_data) {
+            const dataUrl = `data:${data.content_type || 'image/png'};base64,${data.base64_data}`;
+            await setIconDataUrl(iconUrl, dataUrl);
+          }
+        }
+      }
+    } catch (e) {
+      // 静默忽略预加载失败，不影响主流程
     }
   }
 }

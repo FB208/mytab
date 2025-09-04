@@ -310,8 +310,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   return true;
 });
 
-// stripIconDataUrls 函数已移至 webdav-sync.js 共享模块
-
 /**
  * 后台收集网站favicon图标的完整流程
  * 使用统一的图标获取逻辑，支持图标验证和完整错误处理

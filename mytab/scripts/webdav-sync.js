@@ -114,38 +114,6 @@ export function getLocalDataTimestamp(localData) {
   }
 }
 
-/**
- * 清理数据中的图标数据URL
- * 用于减少备份文件大小，避免存储过大的base64图标数据
- * 
- * @param {Object} data - 需要清理的数据对象
- */
-export function stripIconDataUrls(data) {
-  if (!data || !Array.isArray(data.folders)) return;
-  
-  // 递归清理文件夹树的函数
-  function cleanFolder(folder) {
-    // 清理文件夹中的书签图标
-    if (Array.isArray(folder.bookmarks)) {
-      folder.bookmarks.forEach(b => { 
-        if (b && 'iconDataUrl' in b) delete b.iconDataUrl; 
-      });
-    }
-    
-    // 递归清理子文件夹（新的无限层级结构）
-    if (Array.isArray(folder.children)) {
-      folder.children.forEach(child => {
-        cleanFolder(child);
-      });
-    }
-    
-  }
-  
-  // 递归遍历所有文件夹和书签，删除图标数据
-  data.folders.forEach(folder => {
-    cleanFolder(folder);
-  });
-}
 
 /**
  * 检查云端是否有更新的数据
@@ -355,13 +323,6 @@ export async function doBackupToCloud({ data, settings, source, createClient, is
       
       // 确保不将设置信息写入备份，保持数据纯粹性
       if (cleanData.settings) delete cleanData.settings;
-      
-      // 移除图标数据URL，避免备份文件过大 下面注释的代码不要删除
-      try { 
-        stripIconDataUrls(cleanData); 
-      } catch (e) {
-        // 忽略清理失败
-      }
     }
     
     // 构建标准格式的备份数据

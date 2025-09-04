@@ -110,6 +110,103 @@ export async function writeSettings(settings) {
 }
 
 /**
+ * 读取图标缓存数据
+ * @returns {Promise<Object>} 图标缓存对象，key为iconUrl，value为base64数据
+ */
+export async function readIconData() {
+  const { iconData } = await chrome.storage.local.get({
+    iconData: {}
+  });
+  return iconData;
+}
+
+/**
+ * 写入图标缓存数据
+ * @param {Object} iconData - 图标缓存对象
+ */
+export async function writeIconData(iconData) {
+  await chrome.storage.local.set({ iconData });
+}
+
+/**
+ * 获取指定图标URL的base64数据
+ * @param {string} iconUrl - 图标URL
+ * @returns {Promise<string|null>} base64数据，不存在返回null
+ */
+export async function getIconDataUrl(iconUrl) {
+  if (!iconUrl) return null;
+  const iconData = await readIconData();
+  return iconData[iconUrl] || null;
+}
+
+/**
+ * 保存指定图标URL的base64数据
+ * @param {string} iconUrl - 图标URL
+ * @param {string} dataUrl - base64数据
+ */
+export async function setIconDataUrl(iconUrl, dataUrl) {
+  if (!iconUrl) return;
+  const iconData = await readIconData();
+  iconData[iconUrl] = dataUrl;
+  await writeIconData(iconData);
+}
+
+/**
+ * 删除指定图标URL的缓存数据
+ * @param {string} iconUrl - 图标URL
+ */
+export async function removeIconDataUrl(iconUrl) {
+  if (!iconUrl) return;
+  const iconData = await readIconData();
+  delete iconData[iconUrl];
+  await writeIconData(iconData);
+}
+
+/**
+ * 清空所有图标缓存数据
+ */
+export async function clearIconData() {
+  await writeIconData({});
+}
+
+/**
+ * 清理无用的图标缓存数据
+ * 删除在书签中不再使用的图标缓存
+ */
+export async function cleanupUnusedIconData() {
+  const data = await readData();
+  const iconData = await readIconData();
+  const usedIconUrls = new Set();
+  
+  // 递归收集所有使用的图标URL
+  function collectIconUrls(folder) {
+    if (Array.isArray(folder.bookmarks)) {
+      folder.bookmarks.forEach(bookmark => {
+        if (bookmark.iconUrl) {
+          usedIconUrls.add(bookmark.iconUrl);
+        }
+      });
+    }
+    if (Array.isArray(folder.children)) {
+      folder.children.forEach(child => collectIconUrls(child));
+    }
+  }
+  
+  data.folders.forEach(folder => collectIconUrls(folder));
+  
+  // 删除未使用的图标数据
+  const cleanedIconData = {};
+  Object.keys(iconData).forEach(iconUrl => {
+    if (usedIconUrls.has(iconUrl)) {
+      cleanedIconData[iconUrl] = iconData[iconUrl];
+    }
+  });
+  
+  await writeIconData(cleanedIconData);
+  console.log(`清理完成，保留${Object.keys(cleanedIconData).length}个图标缓存，清理${Object.keys(iconData).length - Object.keys(cleanedIconData).length}个无用缓存`);
+}
+
+/**
  * 生成唯一ID
  * @param {string} prefix - ID前缀，默认为'id'
  * @returns {string} 格式为 prefix_时间戳_随机字符串 的唯一ID
@@ -469,7 +566,6 @@ export async function moveFolderToRootPosition(folderId, targetFolderId, positio
  * @param {string} params.url - 书签URL
  * @param {string} [params.name] - 书签名称，如果未提供则从URL推测
  * @param {string} [params.iconUrl] - 图标URL
- * @param {string} [params.iconDataUrl] - 图标数据URL（base64）
  * @param {Object} [params.mono] - 单色图标配置
  * @param {string} [params.remark] - 备注信息
  * @returns {Promise<Object|null>} 创建的书签对象，如果目标文件夹不存在则返回null
@@ -479,7 +575,6 @@ export async function addBookmark({
   url,
   name,
   iconUrl,
-  iconDataUrl,
   mono,
   remark
 }) {
@@ -494,7 +589,6 @@ export async function addBookmark({
     name: title, // 书签名称
     iconType: iconUrl ? 'favicon' : 'mono', // 图标类型：favicon或mono
     iconUrl: iconUrl || '', // 图标URL
-    iconDataUrl: iconDataUrl || '', // 图标数据URL
     mono: mono || null, // 单色图标配置
     remark: remark || '' // 备注信息
   };
@@ -569,7 +663,6 @@ export async function updateBookmarkMono({
  * @param {string} [params.name] - 新的名称
  * @param {string} [params.iconType] - 图标类型：'favicon' 或 'mono'
  * @param {string} [params.iconUrl] - 图标URL
- * @param {string} [params.iconDataUrl] - 图标数据URL
  * @param {Object} [params.mono] - 单色图标配置
  */
 export async function updateBookmark({
@@ -579,7 +672,6 @@ export async function updateBookmark({
   name,
   iconType,
   iconUrl,
-  iconDataUrl,
   mono
 }) {
   const data = await readData();
@@ -595,13 +687,11 @@ export async function updateBookmark({
   if (iconType === 'favicon') {
     bm.iconType = 'favicon';
     bm.iconUrl = iconUrl || buildFaviconUrl(bm.url);
-    if (iconDataUrl !== undefined) bm.iconDataUrl = iconDataUrl || '';
     bm.mono = null;
   }
   if (iconType === 'mono') {
     bm.iconType = 'mono';
     bm.iconUrl = '';
-    bm.iconDataUrl = '';
     bm.mono = mono || bm.mono;
   }
 
