@@ -131,7 +131,6 @@
     writeLocal(obj || {});
   }
 
-  // stripIconDataUrls 函数已移至 webdav-sync.js 共享模块
 
   async function doBackup(source) {
     const { data, settings } = await readAllFromShim();

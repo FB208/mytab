@@ -139,12 +139,6 @@ export function stripIconDataUrls(data) {
       });
     }
     
-    // 向后兼容：清理旧的subfolders字段
-    if (Array.isArray(folder.subfolders)) {
-      folder.subfolders.forEach(sub => {
-        cleanFolder(sub);
-      });
-    }
   }
   
   // 递归遍历所有文件夹和书签，删除图标数据
@@ -363,11 +357,11 @@ export async function doBackupToCloud({ data, settings, source, createClient, is
       if (cleanData.settings) delete cleanData.settings;
       
       // 移除图标数据URL，避免备份文件过大 下面注释的代码不要删除
-      // try { 
-      //   stripIconDataUrls(cleanData); 
-      // } catch (e) {
-      //   // 忽略清理失败
-      // }
+      try { 
+        stripIconDataUrls(cleanData); 
+      } catch (e) {
+        // 忽略清理失败
+      }
     }
     
     // 构建标准格式的备份数据
