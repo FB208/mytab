@@ -22,7 +22,7 @@ export const DEFAULT_SETTINGS = {
     password: '' // WebDAV密码
   },
   backup: {
-    enabled: true, // 是否启用备份
+    enabled: false, // 是否启用备份，默认关闭
     frequencyHours: 4, // 备份频率（小时）
     maxSnapshots: 100 // 最大快照数量
   },
@@ -146,52 +146,6 @@ export async function ensureInit() {
   if (!data || !('folders' in data)) {
     await writeData(DEFAULT_DATA);
     return;
-  }
-  
-  // 数据迁移：将旧的二级结构转换为新的无限层级结构
-  let needsMigration = false;
-  const migratedData = deepClone(data);
-  
-  if (Array.isArray(migratedData.folders)) {
-    migratedData.folders.forEach(folder => {
-      // 检查是否有旧的subfolders字段需要迁移
-      if (folder.subfolders && !folder.children) {
-        needsMigration = true;
-        folder.children = folder.subfolders.map(subfolder => ({
-          ...subfolder,
-          type: 'folder',
-          parentId: folder.id,
-          icon: '📁',
-          children: [] // 子文件夹初始化为无子级
-        }));
-        // 保留subfolders字段以保持向后兼容性，但新逻辑使用children
-      }
-      
-      // 确保文件夹有必要的新字段
-      if (!folder.type) {
-        folder.type = 'folder';
-        needsMigration = true;
-      }
-      if (!folder.parentId) {
-        folder.parentId = null; // 根级文件夹
-        needsMigration = true;
-      }
-      if (!folder.children) {
-        folder.children = [];
-        needsMigration = true;
-      }
-    });
-  }
-  
-  // 如果需要迁移，保存迁移后的数据
-  if (needsMigration) {
-    // 保持原有的lastModified时间戳，避免影响云端同步判断
-    // 只有真正的用户数据变化才应该更新时间戳
-    if (!migratedData.lastModified) {
-      migratedData.lastModified = Date.now();
-    }
-    await writeData(migratedData);
-    console.log('数据已成功迁移到新的无限层级结构（保持原时间戳）');
   }
 }
 

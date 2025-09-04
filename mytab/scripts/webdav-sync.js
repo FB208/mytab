@@ -109,49 +109,9 @@ export function getLocalDataTimestamp(localData) {
   if (localData?.lastModified) {
     return localData.lastModified;
   }
-  
-  // 策略2：递归遍历所有文件夹和书签，获取最新的时间戳
-  let latestTime = 0;
-  
-  // 递归遍历文件夹树的函数
-  function traverseFolder(folder) {
-    // 检查文件夹本身的时间戳
-    if (folder.createdAt) latestTime = Math.max(latestTime, folder.createdAt);
-    if (folder.updatedAt) latestTime = Math.max(latestTime, folder.updatedAt);
-    
-    // 检查文件夹内的书签
-    if (folder.bookmarks) {
-      folder.bookmarks.forEach(bookmark => {
-        if (bookmark.createdAt) latestTime = Math.max(latestTime, bookmark.createdAt);
-        if (bookmark.updatedAt) latestTime = Math.max(latestTime, bookmark.updatedAt);
-      });
-    }
-    
-    // 递归检查子文件夹（新的无限层级结构）
-    if (folder.children) {
-      folder.children.forEach(child => {
-        traverseFolder(child);
-      });
-    }
-    
-    // 向后兼容：检查旧的subfolders字段
-    if (folder.subfolders) {
-      folder.subfolders.forEach(subfolder => {
-        traverseFolder(subfolder);
-      });
-    }
+  else{
+    return new Date('2020-01-01').getTime();
   }
-  
-  // 检查主文件夹列表
-  if (localData?.folders) {
-    localData.folders.forEach(folder => {
-      traverseFolder(folder);
-    });
-  }
-  
-  // 策略3：如果找不到任何时间戳，返回一个较早的默认时间
-  // 这样可以确保云端数据会被认为是更新的，避免数据丢失
-  return latestTime || new Date('2020-01-01').getTime();
 }
 
 /**
@@ -206,8 +166,8 @@ export function stripIconDataUrls(data) {
 export async function checkCloudData({ localData, settings, createClient }) {
   try {
     // 验证WebDAV配置和自动备份是否启用
-    if (!settings?.webdav?.url || !settings?.backup?.enabled) {
-      console.log('WebDAV未配置或自动备份未启用，跳过云端检查');
+    if (!settings?.webdav?.url) {
+      console.log('WebDAV未配置，跳过云端检查');
       return null;
     }
     
@@ -323,10 +283,8 @@ export async function syncFromCloudData({
     // 步骤3：设置正确的数据时间戳和同步元信息
     // 优先使用文件名中的时间戳（最准确）
     const fileTimestamp = extractTimestampFromFileName(fileName);
-    const originalTimestamp = fileTimestamp || cloudData?.ts || restored.lastModified || Date.now();
-    
+ 
     // 设置同步后的数据属性
-    restored.lastModified = originalTimestamp;
     restored.syncedFrom = fileName;  // 记录同步来源文件名
     restored.syncedAt = new Date().toISOString();  // 记录同步时间
     
@@ -404,12 +362,12 @@ export async function doBackupToCloud({ data, settings, source, createClient, is
       // 确保不将设置信息写入备份，保持数据纯粹性
       if (cleanData.settings) delete cleanData.settings;
       
-      // 移除图标数据URL，避免备份文件过大
-      try { 
-        stripIconDataUrls(cleanData); 
-      } catch (e) {
-        // 忽略清理失败
-      }
+      // 移除图标数据URL，避免备份文件过大 下面注释的代码不要删除
+      // try { 
+      //   stripIconDataUrls(cleanData); 
+      // } catch (e) {
+      //   // 忽略清理失败
+      // }
     }
     
     // 构建标准格式的备份数据

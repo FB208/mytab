@@ -37,6 +37,11 @@ export class WebDAVClient {
   // 静态验证缓存，跨实例共享
   static _globalValidationCache = new Map();
   
+  // 缓存配置常量
+  static CACHE_DURATION = 30 * 60 * 1000; // 30分钟缓存时间
+  static MAX_CACHE_SIZE = 100; // 最大缓存条目数
+  static GC_THRESHOLD = 0.8; // 垃圾回收阈值（80%时触发）
+  
   /**
    * 构造函数 - 初始化 WebDAV 客户端
    * @param {Object} config - 配置对象
@@ -53,6 +58,9 @@ export class WebDAVClient {
     
     // 验证缓存：使用全局缓存
     this._configHash = this._getConfigHash();
+    
+    // 创建实例时触发垃圾回收检查
+    this._maybeRunGarbageCollection();
   }
   
   /**
@@ -61,6 +69,121 @@ export class WebDAVClient {
   static clearAllValidationCache() {
     WebDAVClient._globalValidationCache.clear();
     console.log('🧹 所有WebDAV验证缓存已清除');
+  }
+  
+  /**
+   * 垃圾回收机制 - 清理过期和最少使用的缓存条目
+   * @private
+   */
+  _maybeRunGarbageCollection() {
+    const cache = WebDAVClient._globalValidationCache;
+    const currentSize = cache.size;
+    const maxSize = WebDAVClient.MAX_CACHE_SIZE;
+    
+    // 如果缓存大小超过阈值，触发垃圾回收
+    if (currentSize >= maxSize * WebDAVClient.GC_THRESHOLD) {
+      console.log(`🗑️ WebDAV缓存垃圾回收开始: 当前${currentSize}条，阈值${Math.floor(maxSize * WebDAVClient.GC_THRESHOLD)}条`);
+      
+      const now = Date.now();
+      const expiredKeys = [];
+      const validEntries = [];
+      
+      // 第一轮：清理过期条目
+      for (const [key, entry] of cache.entries()) {
+        const age = now - entry.timestamp;
+        if (age > WebDAVClient.CACHE_DURATION) {
+          expiredKeys.push(key);
+        } else {
+          validEntries.push([key, entry]);
+        }
+      }
+      
+      // 删除过期条目
+      expiredKeys.forEach(key => cache.delete(key));
+      
+      // 第二轮：如果仍然超过限制，使用LRU策略清理
+      const remainingSize = cache.size;
+      if (remainingSize > maxSize * 0.7) { // 清理到70%
+        const targetSize = Math.floor(maxSize * 0.7);
+        const toRemove = remainingSize - targetSize;
+        
+        // 按最后访问时间排序，删除最少使用的条目
+        validEntries
+          .sort((a, b) => a[1].lastAccessed - b[1].lastAccessed) // 按访问时间升序
+          .slice(0, toRemove) // 取前N个最少使用的
+          .forEach(([key]) => cache.delete(key));
+      }
+      
+      const finalSize = cache.size;
+      const cleanedCount = currentSize - finalSize;
+      
+      if (cleanedCount > 0) {
+        console.log(`🧹 WebDAV缓存垃圾回收完成: 清理了${cleanedCount}条记录，剩余${finalSize}条`);
+      }
+    }
+  }
+  
+  /**
+   * 手动触发缓存垃圾回收（静态方法）
+   * @param {boolean} force - 是否强制清理所有过期条目
+   */
+  static runGarbageCollection(force = false) {
+    const cache = WebDAVClient._globalValidationCache;
+    const now = Date.now();
+    const expiredKeys = [];
+    const beforeSize = cache.size;
+    
+    // 清理过期条目
+    for (const [key, entry] of cache.entries()) {
+      const age = now - entry.timestamp;
+      if (force || age > WebDAVClient.CACHE_DURATION) {
+        expiredKeys.push(key);
+      }
+    }
+    
+    expiredKeys.forEach(key => cache.delete(key));
+    
+    const afterSize = cache.size;
+    const cleanedCount = beforeSize - afterSize;
+    
+    console.log(`🧹 手动WebDAV缓存清理${force ? '(强制)' : ''}: 清理了${cleanedCount}条记录，剩余${afterSize}条`);
+    
+    return { cleaned: cleanedCount, remaining: afterSize };
+  }
+  
+  /**
+   * 获取缓存统计信息（静态方法）
+   * @returns {Object} 缓存统计信息
+   */
+  static getCacheStats() {
+    const cache = WebDAVClient._globalValidationCache;
+    const now = Date.now();
+    let expiredCount = 0;
+    let validCount = 0;
+    let oldestAge = 0;
+    let newestAge = Infinity;
+    
+    for (const [, entry] of cache.entries()) {
+      const age = now - entry.timestamp;
+      if (age > WebDAVClient.CACHE_DURATION) {
+        expiredCount++;
+      } else {
+        validCount++;
+      }
+      oldestAge = Math.max(oldestAge, age);
+      newestAge = Math.min(newestAge, age);
+    }
+    
+    return {
+      totalEntries: cache.size,
+      validEntries: validCount,
+      expiredEntries: expiredCount,
+      maxSize: WebDAVClient.MAX_CACHE_SIZE,
+      cacheUsagePercent: ((cache.size / WebDAVClient.MAX_CACHE_SIZE) * 100).toFixed(1) + '%',
+      oldestEntryAge: Math.floor(oldestAge / 1000) + '秒',
+      newestEntryAge: newestAge === Infinity ? '无' : Math.floor(newestAge / 1000) + '秒',
+      cacheDuration: WebDAVClient.CACHE_DURATION / (60 * 1000) + '分钟'
+    };
   }
   
   /**
@@ -79,9 +202,9 @@ export class WebDAVClient {
     const cache = WebDAVClient._globalValidationCache.get(this._configHash);
     if (!cache) return false;
     
-    // 检查缓存是否过期（15分钟）
+    // 检查缓存是否过期（30分钟）
     const cacheAge = Date.now() - cache.timestamp;
-    if (cacheAge > 15 * 60 * 1000) {
+    if (cacheAge > WebDAVClient.CACHE_DURATION) {
       WebDAVClient._globalValidationCache.delete(this._configHash);
       return false;
     }
@@ -95,7 +218,12 @@ export class WebDAVClient {
    */
   _getValidationCache() {
     const cache = WebDAVClient._globalValidationCache.get(this._configHash);
-    return cache ? cache.result : null;
+    if (cache) {
+      // 更新最后访问时间
+      cache.lastAccessed = Date.now();
+      return cache.result;
+    }
+    return null;
   }
   
   /**
@@ -103,9 +231,13 @@ export class WebDAVClient {
    * @param {Object} result - 验证结果
    */
   _setValidationCache(result) {
+    // 在设置新缓存前检查是否需要垃圾回收
+    this._maybeRunGarbageCollection();
+    
     WebDAVClient._globalValidationCache.set(this._configHash, {
       result: { ...result },
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      lastAccessed: Date.now() // 添加最后访问时间用于LRU
     });
   }
   

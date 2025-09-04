@@ -15,9 +15,6 @@ import {
   checkCloudData, 
   syncFromCloudData, 
   doBackupToCloud,
-  stripIconDataUrls,
-  extractTimestampFromFileName,
-  getLocalDataTimestamp 
 } from '../scripts/webdav-sync.js';
 
 /**
@@ -459,7 +456,6 @@ async function checkCloudDataOnStartup() {
   });
 }
 
-// extractTimestampFromFileName 和 getLocalDataTimestamp 函数已移至 webdav-sync.js 共享模块
 
 /**
  * 从云端同步数据到本地

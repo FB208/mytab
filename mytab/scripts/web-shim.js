@@ -203,7 +203,6 @@
     });
   }
 
-  // extractTimestampFromFileName 和 getLocalDataTimestamp 函数已移至 webdav-sync.js 共享模块
 
   // 从云端同步数据（Web版本）
   async function syncFromCloudInWeb(fileName) {
