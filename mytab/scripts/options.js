@@ -19,6 +19,7 @@ const els = {
   url: document.getElementById('dav-url'),           // WebDAV服务器URL输入框
   username: document.getElementById('dav-username'), // WebDAV用户名输入框
   password: document.getElementById('dav-password'), // WebDAV密码输入框
+  clientIdentifier: document.getElementById('client-identifier'), // 客户端标识输入框
   backHome: document.getElementById('btn-back-home'), // 返回主页按钮
   enabled: document.getElementById('backup-enabled'),  // 自动备份开关复选框
   hours: document.getElementById('backup-hours'),    // 备份频率输入框（小时）
@@ -74,6 +75,9 @@ window.testImportResultDialog = function() {
  * 3. 加载备份历史列表
  */
 async function init() {
+  // 导入生成客户端标识的函数
+  const { generateClientIdentifier } = await import('./storage.js');
+  
   // 读取当前存储的设置和数据
   const { settings, data } = await readAll();
   
@@ -81,6 +85,18 @@ async function init() {
   els.url.value = settings.webdav?.url || '';
   els.username.value = settings.webdav?.username || '';
   els.password.value = settings.webdav?.password || '';
+  
+  // 填充客户端标识，如果不存在则生成新的并保存
+  let clientIdentifier = settings.client?.identifier;
+  if (!clientIdentifier) {
+    clientIdentifier = generateClientIdentifier();
+    const updatedSettings = {
+      ...settings,
+      client: { ...settings.client, identifier: clientIdentifier }
+    };
+    await writeSettings(updatedSettings);
+  }
+  els.clientIdentifier.value = clientIdentifier;
   
   // 填充自动备份配置
   els.enabled.checked = !!settings.backup?.enabled;
@@ -108,6 +124,20 @@ function bind() {
   els.backHome?.addEventListener('click', () => {
     // 打开扩展的新标签页（index.html）
     window.open('index.html', '_self');
+  });
+
+  // 客户端标识输入框实时验证
+  els.clientIdentifier?.addEventListener('input', (e) => {
+    // 移除下划线
+    const value = e.target.value.replace(/_/g, '');
+    if (value !== e.target.value) {
+      e.target.value = value;
+      // 可以添加一个提示
+      e.target.style.borderColor = '#ff6b6b';
+      setTimeout(() => {
+        e.target.style.borderColor = '';
+      }, 1000);
+    }
   });
 
   /**
@@ -138,6 +168,9 @@ function bind() {
           enabled: els.enabled.checked, 
           frequencyHours: Number(els.hours.value) || 4, 
           maxSnapshots: Math.max(1, Number(els.max.value) || 100) 
+        },
+        client: {
+          identifier: (els.clientIdentifier.value || '').trim() || 'MYTAB'
         }
       };
       

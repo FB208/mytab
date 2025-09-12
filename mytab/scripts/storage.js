@@ -26,6 +26,9 @@ export const DEFAULT_SETTINGS = {
     frequencyHours: 4, // 备份频率（小时）
     maxSnapshots: 100 // 最大快照数量
   },
+  client: {
+    identifier: '' // 客户端标识符，用于区分不同的客户端实例
+  },
   theme: {} // 主题设置（预留）
 };
 
@@ -204,6 +207,20 @@ export async function cleanupUnusedIconData() {
   
   await writeIconData(cleanedIconData);
   console.log(`清理完成，保留${Object.keys(cleanedIconData).length}个图标缓存，清理${Object.keys(iconData).length - Object.keys(cleanedIconData).length}个无用缓存`);
+}
+
+/**
+ * 生成客户端标识符
+ * 5位随机字母和数字组合，不包含下划线
+ * @returns {string} 5位字母数字组合的随机字符串
+ */
+export function generateClientIdentifier() {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  for (let i = 0; i < 5; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
 }
 
 /**

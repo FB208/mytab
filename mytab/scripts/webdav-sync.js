@@ -68,26 +68,33 @@ export function parseFriendlyFormatToTimestamp(timeStr) {
 
 /**
  * 从备份文件名中提取时间戳
- * 只支持新的用户友好格式 yyMMdd_HHmmss_sss
+ * 支持新的文件名格式，包含客户端标识符
  * 
- * 文件名格式：prefix_250819_014432_864.json
+ * 文件名格式：clientId_prefix_yyMMdd_HHmmss_sss.json
+ * 通过下划线分割：[clientId, prefix, date, time, ms]
  * 
  * @param {string} fileName - 备份文件名
  * @returns {number|null} 提取的时间戳（毫秒），失败返回null
  */
 export function extractTimestampFromFileName(fileName) {
   try {
-    // 匹配新的友好格式：yyMMdd_HHmmss_sss
-    const match = fileName.match(/_([0-9]{6}_[0-9]{6}_[0-9]{3})\.json$/);
-    if (match) {
-      const timeStr = match[1];
-      return parseFriendlyFormatToTimestamp(timeStr);
+    // 移除.json扩展名并按下划线分割
+    const nameWithoutExt = fileName.slice(0, -5);
+    const parts = nameWithoutExt.split('_');
+    
+    // 至少需要3个部分作为时间戳
+    if (parts.length < 3) {
+      return null;
     }
     
-    console.warn('无法识别的文件名格式:', fileName, '，期望格式：prefix_yyMMdd_HHmmss_sss.json');
-    return null;
+    // 提取时间戳部分（最后3个部分）
+    const dateStr = parts[parts.length - 3]; // yyMMdd
+    const timeStr = parts[parts.length - 2]; // HHmmss  
+    const msStr = parts[parts.length - 1];   // sss
+    
+    const timeStampStr = `${dateStr}_${timeStr}_${msStr}`;
+    return parseFriendlyFormatToTimestamp(timeStampStr);
   } catch (e) {
-    console.warn('解析文件名时间戳失败:', fileName, e);
     return null;
   }
 }
@@ -142,10 +149,10 @@ export async function checkCloudData({ localData, settings, createClient }) {
     
     // 筛选有效的数据备份文件：
     // 1. 必须是.json文件
-    // 2. 排除sync_backup_前缀的文件（这些是同步前的安全备份）
+    // 2. 排除同步前的安全备份文件（新格式：CLIENTID_sync_backup_xxx.json）
     const validFiles = files.filter(f => 
       f.name.endsWith('.json') && 
-      !f.name.startsWith('sync_backup_')
+      !f.name.includes('_sync_backup_')
     );
     
     if (validFiles.length === 0) {
@@ -301,6 +308,9 @@ export async function doBackupToCloud({ data, settings, source, createClient, is
     // 创建WebDAV客户端
     const client = await createClient(settings.webdav);
     
+    // 获取客户端标识符，如果不存在则使用默认值
+    const clientIdentifier = settings.client?.identifier || 'MYTAB';
+    
     // 根据备份来源设置文件名前缀
     const prefixMap = { 
       alarm: 'snapshot_schedule',      // 定时备份
@@ -313,7 +323,7 @@ export async function doBackupToCloud({ data, settings, source, createClient, is
     // 使用数据最后修改时间作为文件名时间戳，确保准确性
     const dataTimestamp = data?.lastModified || Date.now();
     const formattedTime = formatTimestampToFriendlyFormat(dataTimestamp);
-    const name = `${prefix}_${formattedTime}.json`;
+    const name = `${clientIdentifier}_${prefix}_${formattedTime}.json`;
     
     // 数据清理：避免缓存污染和减少文件大小
     // 深拷贝数据，防止修改原始数据
