@@ -1931,8 +1931,7 @@ async function syncFromCloudWithFeedback(fileName) {
     });
 
     if (response?.ok) {
-      // 同步成功，刷新界面
-      await render();
+      // 同步成功，依赖 data:changed 通知触发界面刷新，避免重复渲染
       hideGlobalLoading();
       toast('✅ 同步成功！数据已更新', 2000);
     } else {

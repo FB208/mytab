@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 此文件为 Claude Code (claude.ai/code) 在处理此仓库代码时提供指导。
 
 ## 项目概述
@@ -53,13 +55,23 @@ folders[] -> children[] -> bookmarks[]
 
 ### 测试扩展
 1. 打开 Chrome 并导航到 `chrome://extensions/`
-2. 启用“开发者模式”
-3. 点击“加载已解压的扩展程序”并选择 `mytab/` 目录
+2. 启用"开发者模式"
+3. 点击"加载已解压的扩展程序"并选择 `mytab/` 目录
 4. 扩展将覆盖您的新标签页
 
 ### 加载更改
 - 修改任何文件后，在 `chrome://extensions/` 中点击扩展卡片上的刷新按钮
 - 无需构建步骤 - 更改立即生效
+
+### Web版本部署
+- 使用 `vercel` 部署到 Vercel 平台
+- 配置文件在 `vercel.json` 中，包含路由重定向规则
+- API代理位于 `api/webdav.js`，用于处理CORS问题
+
+### 调试
+- 使用Chrome DevTools调试扩展页面
+- Service Worker调试：在`chrome://extensions/`页面点击"检查视图"中的"背景页"
+- 查看扩展日志：打开DevTools Console查看错误和调试信息
 
 ### 测试 WebDAV 集成
 - 通过扩展的选项页配置 WebDAV 设置
@@ -118,12 +130,22 @@ Web 版本可以部署到 Vercel 等平台，共享核心逻辑：
 - `vercel.json` 处理 Web 部署的路由
 - `scripts/` 中的共享模块在扩展和 Web 环境中都可以工作
 
-## 安全考虑
+## 权限和安全
 
+### 扩展权限说明
+- `storage`: 保存书签数据和设置
+- `alarms`: 定时备份功能
+- `notifications`: 备份完成和错误通知
+- `bookmarks`: 同步浏览器书签
+- `unlimitedStorage`: 支持大量书签存储
+- `optional_host_permissions`: 获取网站图标，仅在需要时请求
+
+### 安全考虑
 - WebDAV 凭据存储在 Chrome 的本地存储中（不同步）
 - CORS 代理验证并仅转发 WebDAV 特定的头部
 - 在 WebDAV 操作之外不记录或传输敏感数据
 - 自动数据验证防止同步过程中的数据损坏
+- 扩展仅在本地处理数据，无数据泄露风险
 
 ## 常见开发任务
 
