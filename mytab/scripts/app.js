@@ -70,6 +70,17 @@ chrome.runtime.onMessage.addListener((msg) => {
   }
 });
 
+// 监听Chrome存储变化，实时更新数据版本显示
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.data) {
+    // 只更新版本显示，避免完整重新渲染
+    const newData = changes.data.newValue;
+    if (newData) {
+      updateDataVersion(newData);
+    }
+  }
+});
+
 // 监听所有操作以触发“操作型自动备份”
 async function recordHandleBackup() {
   try {

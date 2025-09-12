@@ -225,6 +225,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         return;
       }
 
+
       // 手动触发备份
       if (msg?.type === 'backup:manual') {
         const src = msg?.source || 'manual';
