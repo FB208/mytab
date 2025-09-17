@@ -1024,8 +1024,8 @@ export class EnhancedBookmarkImporter {
         
         if (response.ok) {
           const data = await response.json();
-          if (data.base64_data) {
-            const dataUrl = `data:${data.content_type || 'image/png'};base64,${data.base64_data}`;
+          if (data.data.base64_data) {
+            const dataUrl = `data:${data.data.content_type || 'image/png'};base64,${data.data.base64_data}`;
             await setIconDataUrl(iconUrl, dataUrl);
           }
         }
@@ -1039,8 +1039,8 @@ export class EnhancedBookmarkImporter {
         
         if (response.ok) {
           const data = await response.json();
-          if (data.base64_data) {
-            const dataUrl = `data:${data.content_type || 'image/png'};base64,${data.base64_data}`;
+          if (data.data.base64_data) {
+            const dataUrl = `data:${data.data.content_type || 'image/png'};base64,${data.data.base64_data}`;
             await setIconDataUrl(iconUrl, dataUrl);
           }
         }

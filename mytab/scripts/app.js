@@ -1757,9 +1757,9 @@ async function toDataUrlSafe(url) {
     
     if (response.ok) {
       const data = await response.json();
-      if (data.base64_data) {
+      if (data.data.base64_data) {
         // 构造完整的data URL
-        return `data:${data.content_type || 'image/png'};base64,${data.base64_data}`;
+        return `data:${data.data.content_type || 'image/png'};base64,${data.data.base64_data}`;
       }
     }
   } catch (e) {
