@@ -304,10 +304,18 @@ function bindEvents() {
       const name = document.createElement('div');
       name.className = 'name';
       name.textContent = it.name;
+      // 显示完整文件夹路径（支持多级）
+      const pathEl = document.createElement('div');
+      pathEl.className = 'path';
+      pathEl.textContent = it.subName || '';
+      pathEl.style.fontSize = '12px';
+      pathEl.style.color = '#999';
+      pathEl.style.marginTop = '2px';
       const url = document.createElement('div');
       url.className = 'url';
       url.textContent = it.url;
       meta.appendChild(name);
+      meta.appendChild(pathEl);
       meta.appendChild(url);
       
       // 如果有备注信息，显示备注
