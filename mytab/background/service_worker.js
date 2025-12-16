@@ -456,7 +456,7 @@ async function fetchTitle(url) {
  * @returns {Promise<Object>} - 返回 {success, title, description} 
  */
 async function fetchTitlePro(url) {
-  const TIMEOUT_MS = 6000; // 15秒超时
+  const TIMEOUT_MS = 15000; // 15秒超时
   
   try {
     const controller = new AbortController();
