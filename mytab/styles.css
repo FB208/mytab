@@ -280,6 +280,85 @@ body {
 .modal .cover img { max-width: 28px; max-height: 28px; }
 .modal .cover .mono-icon { width: 28px; height: 28px; border-radius: 8px; display:grid; place-items:center; font-weight:700; color:#fff; font-size: 16px; line-height: 1; }
 
+/* URL输入框组合样式 */
+.url-input-group {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.url-input-group .search {
+  flex: 1;
+  padding-right: 48px;
+}
+
+.ai-analyze-btn {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 8px;
+  color: var(--text-dim);
+  cursor: pointer;
+  box-shadow: var(--shadow-dark-sm), var(--shadow-light-sm);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  transition: all 0.2s ease;
+}
+
+.ai-analyze-btn:hover {
+  transform: translateY(-50%) scale(1.05);
+  color: var(--primary);
+  background: rgba(255, 255, 255, 0.75);
+  box-shadow: var(--shadow-dark-sm), var(--shadow-light-sm), 0 0 8px rgba(78, 168, 222, 0.2);
+}
+
+.ai-analyze-btn:active {
+  transform: translateY(-50%) scale(0.96);
+  box-shadow: inset var(--shadow-dark-sm), inset var(--shadow-light-sm);
+}
+
+.ai-analyze-btn svg {
+  opacity: 0.7;
+  transition: opacity 0.2s ease, transform 0.3s ease;
+}
+
+.ai-analyze-btn:hover svg {
+  opacity: 1;
+}
+
+/* AI分析加载状态 - 星星旋转动画 */
+.ai-analyze-btn.loading {
+  pointer-events: none;
+}
+
+.ai-analyze-btn.loading svg {
+  opacity: 1;
+  color: var(--primary);
+  animation: starSpin 1s linear infinite;
+}
+
+@keyframes starSpin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* 输入框锁定状态 */
+.modal .search.ai-locked {
+  background: rgba(200, 200, 200, 0.3);
+  color: var(--text-dim);
+  pointer-events: none;
+  opacity: 0.7;
+}
+
 .fav-candidates { display:flex; gap:10px; flex-wrap: wrap; margin-top: 6px; }
 .fav-candidate { width:40px; height:40px; display:grid; place-items:center; border-radius:10px; background:#fff; border:1px solid var(--glass-border); box-shadow: var(--shadow); cursor:pointer; }
 .fav-candidate img { max-width:24px; max-height:24px; }

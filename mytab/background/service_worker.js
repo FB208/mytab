@@ -224,6 +224,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         sendResponse({ title });
         return;
       }
+      
+      // AI增强版获取网站标题和描述
+      if (msg?.type === 'title:fetch-pro') {
+        const { url } = msg;
+        const result = await fetchTitlePro(url);
+        sendResponse(result);
+        return;
+      }
 
 
       // 手动触发备份
@@ -437,6 +445,63 @@ async function fetchTitle(url) {
   } catch (error) {
     // 解析失败返回原始URL
     return url;
+  }
+}
+
+/**
+ * AI增强版获取网站标题和描述
+ * 调用外部API获取更准确的网站信息
+ * 
+ * @param {string} url - 目标网站URL
+ * @returns {Promise<Object>} - 返回 {success, title, description} 
+ */
+async function fetchTitlePro(url) {
+  const TIMEOUT_MS = 6000; // 15秒超时
+  
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    
+    const apiUrl = `https://mt.agnet.top/t/web_info?url=${encodeURIComponent(url)}`;
+    
+    const response = await fetch(apiUrl, {
+      method: 'GET',
+      signal: controller.signal,
+      headers: {
+        'Accept': 'application/json'
+      }
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      console.warn(`fetchTitlePro API请求失败 (${response.status}):`, url);
+      return { success: false, error: `HTTP ${response.status}` };
+    }
+    
+    const result = await response.json();
+    
+    if (result.success && result.data) {
+      console.info('fetchTitlePro 成功:', url, result.data.title);
+      return {
+        success: true,
+        title: result.data.title || '',
+        description: result.data.description || ''
+      };
+    } else {
+      console.warn('fetchTitlePro API返回失败:', url, result.message);
+      return { success: false, error: result.message || '未知错误' };
+    }
+    
+  } catch (error) {
+    let errorMessage = error.message || String(error);
+    
+    if (error.name === 'AbortError') {
+      errorMessage = `请求超时 (${TIMEOUT_MS}ms)`;
+    }
+    
+    console.warn('fetchTitlePro 请求异常:', url, errorMessage);
+    return { success: false, error: errorMessage };
   }
 }
 

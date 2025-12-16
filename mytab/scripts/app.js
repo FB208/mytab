@@ -138,7 +138,8 @@ function bindEvents() {
     rowMono: document.getElementById('row-mono'),
     previewFav: document.getElementById('preview-fav'),
     previewMono: document.getElementById('preview-mono'),
-    modeRadios: () => [...document.querySelectorAll('input[name="icon-mode"]')]
+    modeRadios: () => [...document.querySelectorAll('input[name="icon-mode"]')],
+    aiAnalyzeBtn: document.getElementById('btn-ai-analyze')
   };
 
   document.getElementById('btn-settings').addEventListener('click', () => {
@@ -368,6 +369,9 @@ function bindEvents() {
       }
     }, 500);
   });
+
+  // AI分析按钮点击事件
+  modal.aiAnalyzeBtn?.addEventListener('click', handleAiAnalyze);
   
   // 绑定首次操作指引的事件
   bindOnboardingEvents();
@@ -1617,6 +1621,59 @@ async function fetchTitle(url) {
     const domain = u.hostname.replace(/^www\./, '');
     modal.name.value = domain.split('.')[0].charAt(0).toUpperCase() + domain.split('.')[0].slice(1);
   } catch (e) {}
+}
+
+// AI分析网址 - 获取标题和描述
+async function handleAiAnalyze() {
+  const url = modal.url.value.trim();
+  if (!url) {
+    alert('请先输入网址');
+    return;
+  }
+
+  // 验证URL格式
+  try {
+    new URL(url);
+  } catch (e) {
+    alert('请输入有效的网址');
+    return;
+  }
+
+  // 开始加载状态：星星旋转 + 锁定输入框
+  modal.aiAnalyzeBtn?.classList.add('loading');
+  modal.url?.classList.add('ai-locked');
+  modal.name?.classList.add('ai-locked');
+  modal.remark?.classList.add('ai-locked');
+
+  try {
+    const res = await chrome.runtime.sendMessage({
+      type: 'title:fetch-pro',
+      url
+    });
+
+    if (res?.success) {
+      // 填充结果
+      if (res.title) {
+        modal.name.value = res.title;
+      }
+      if (res.description) {
+        modal.remark.value = res.description;
+      }
+      // 同时刷新预览
+      refreshPreview();
+    } else {
+      console.warn('AI分析失败:', res?.error || '未知错误');
+      // 失败时不提示，静默处理
+    }
+  } catch (e) {
+    console.error('AI分析请求异常:', e);
+  } finally {
+    // 结束加载状态：停止旋转 + 解锁输入框
+    modal.aiAnalyzeBtn?.classList.remove('loading');
+    modal.url?.classList.remove('ai-locked');
+    modal.name?.classList.remove('ai-locked');
+    modal.remark?.classList.remove('ai-locked');
+  }
 }
 
 // 图标获取状态变量
