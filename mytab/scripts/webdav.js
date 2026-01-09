@@ -191,7 +191,7 @@ export class WebDAVClient {
    * @returns {string} 配置的哈希值
    */
   _getConfigHash() {
-    return btoa(`${this.url}:${this.username}:${this.password}`);
+    return unicodeToBase64(`${this.url}:${this.username}:${this.password}`);
   }
   
   /**
@@ -256,8 +256,8 @@ export class WebDAVClient {
    */
   authHeader() {
     if (!this.username && !this.password) return {};
-    // 使用 Base64 编码用户名:密码 组合
-    const token = btoa(`${this.username}:${this.password}`);
+    // 使用 Base64 编码用户名:密码 组合（支持中文等 Unicode 字符）
+    const token = unicodeToBase64(`${this.username}:${this.password}`);
     return { 'Authorization': `Basic ${token}` };
   }
 
@@ -751,6 +751,19 @@ function decodeHtmlEntities(str) {
     .replace(/&gt;/g, '>')     // &gt; -> >
     .replace(/&quot;/g, '"')   // &quot; -> "
     .replace(/&#39;/g, "'");   // &#39; -> '
+}
+
+/**
+ * 将 Unicode 字符串转换为 Base64 编码
+ * 支持中文等非 Latin1 字符
+ * @param {string} str - 要编码的字符串
+ * @returns {string} Base64 编码后的字符串
+ */
+function unicodeToBase64(str) {
+  // 将字符串转换为 UTF-8 字节数组，然后转换为 Base64
+  const bytes = new TextEncoder().encode(str);
+  const binString = Array.from(bytes, (byte) => String.fromCodePoint(byte)).join('');
+  return btoa(binString);
 }
 
 /**
