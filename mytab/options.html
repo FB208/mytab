@@ -72,6 +72,21 @@
               <span id="webdav-status-badge" class="status-chip status-neutral" data-i18n="options.statusNotConfigured">未配置</span>
             </div>
 
+            <div class="panel-metrics panel-metrics-3">
+              <article class="metric-tile glass">
+                <div class="metric-label" data-i18n="options.metricHost">目标主机</div>
+                <div id="sync-host-value" class="metric-value" data-i18n="options.metricValuePending">待配置</div>
+              </article>
+              <article class="metric-tile glass">
+                <div class="metric-label" data-i18n="options.metricAccess">访问模式</div>
+                <div id="sync-access-value" class="metric-value" data-i18n="options.statusNotConfigured">未配置</div>
+              </article>
+              <article class="metric-tile glass">
+                <div class="metric-label" data-i18n="options.metricClient">客户端标识</div>
+                <div id="sync-client-value" class="metric-value" data-i18n="options.metricValuePending">待配置</div>
+              </article>
+            </div>
+
             <div class="options-grid-2 options-grid-compact">
               <label class="options-field"><span>URL</span>
                 <input id="dav-url" class="search" placeholder="https://dav.example.com/remote.php/dav/files/xxx/mytab/" autocomplete="off" />
@@ -115,6 +130,21 @@
                 <input type="checkbox" id="backup-enabled" />
                 <span class="toggle-track"><span class="toggle-thumb"></span></span>
               </label>
+            </div>
+
+            <div class="panel-metrics panel-metrics-3">
+              <article class="metric-tile glass">
+                <div class="metric-label" data-i18n="options.metricInterval">快照频率</div>
+                <div id="backup-interval-value" class="metric-value">4h</div>
+              </article>
+              <article class="metric-tile glass">
+                <div class="metric-label" data-i18n="options.metricRetention">保留上限</div>
+                <div id="backup-retention-value" class="metric-value">100</div>
+              </article>
+              <article class="metric-tile glass">
+                <div class="metric-label" data-i18n="options.metricLatest">最近快照</div>
+                <div id="backup-latest-value" class="metric-value" data-i18n="options.noBackups">暂无备份</div>
+              </article>
             </div>
 
             <div class="options-grid-2 options-grid-compact">
@@ -180,6 +210,18 @@
                 <h2 class="panel-title" data-i18n="options.panelToolsTitle">导入与整理</h2>
                 <p class="panel-desc" data-i18n="options.panelToolsDesc">导入浏览器书签，并在增强流程中补齐标题与图标。</p>
               </div>
+              <span id="tools-availability-badge" class="status-chip status-info" data-i18n="options.statusExtensionMode">扩展模式</span>
+            </div>
+
+            <div class="panel-metrics panel-metrics-2 panel-metrics-tight">
+              <article class="metric-tile glass">
+                <div class="metric-label" data-i18n="options.metricAvailability">当前环境</div>
+                <div id="tools-availability-value" class="metric-value" data-i18n="options.statusExtensionMode">扩展模式</div>
+              </article>
+              <article class="metric-tile glass">
+                <div class="metric-label" data-i18n="options.metricEnhancement">导入增强</div>
+                <div id="tools-enhancement-value" class="metric-value" data-i18n="options.metricEnhancementEnabled">标题与图标增强</div>
+              </article>
             </div>
 
             <button id="btn-import-bookmarks" class="primary-btn import-btn options-action-block" data-i18n="options.importBrowserBookmarks">导入浏览器书签</button>

@@ -57,7 +57,16 @@ const els = {
   summaryLatestBadge: document.getElementById('summary-latest-badge'),
   summaryLanguageValue: document.getElementById('summary-language-value'),
   summaryLanguageMeta: document.getElementById('summary-language-meta'),
-  summaryLanguageBadge: document.getElementById('summary-language-badge')
+  summaryLanguageBadge: document.getElementById('summary-language-badge'),
+  syncHostValue: document.getElementById('sync-host-value'),
+  syncAccessValue: document.getElementById('sync-access-value'),
+  syncClientValue: document.getElementById('sync-client-value'),
+  backupIntervalValue: document.getElementById('backup-interval-value'),
+  backupRetentionValue: document.getElementById('backup-retention-value'),
+  backupLatestValue: document.getElementById('backup-latest-value'),
+  toolsAvailabilityBadge: document.getElementById('tools-availability-badge'),
+  toolsAvailabilityValue: document.getElementById('tools-availability-value'),
+  toolsEnhancementValue: document.getElementById('tools-enhancement-value')
 };
 
 const viewState = {
@@ -66,7 +75,8 @@ const viewState = {
   latestBackup: null,
   backupCount: 0,
   connectionStatus: 'notConfigured',
-  connectionError: ''
+  connectionError: '',
+  isExtensionMode: typeof chrome !== 'undefined' && !!chrome?.bookmarks
 };
 
 function setStatusChip(el, text, tone = 'neutral') {
@@ -265,6 +275,21 @@ function renderDashboard() {
   setStatusChip(els.summaryLanguageBadge, language.text, language.tone);
   els.summaryLanguageValue.textContent = language.text;
   els.summaryLanguageMeta.textContent = language.meta;
+
+  els.syncHostValue.textContent = getWebdavHost(viewState.settings?.webdav?.url || '') || t('options.metricValuePending');
+  els.syncAccessValue.textContent = sync.text;
+  els.syncClientValue.textContent = viewState.settings?.client?.identifier || t('options.metricValuePending');
+  els.backupIntervalValue.textContent = `${viewState.settings?.backup?.frequencyHours ?? 4}h`;
+  els.backupRetentionValue.textContent = String(viewState.settings?.backup?.maxSnapshots ?? 100);
+  els.backupLatestValue.textContent = viewState.latestBackup ? formatDateTime(viewState.latestBackup.lastmod) : t('options.noBackups');
+
+  const toolsMode = viewState.isExtensionMode ? t('options.statusExtensionMode') : t('options.statusWebMode');
+  const toolsTone = viewState.isExtensionMode ? 'info' : 'warn';
+  setStatusChip(els.toolsAvailabilityBadge, toolsMode, toolsTone);
+  els.toolsAvailabilityValue.textContent = toolsMode;
+  els.toolsEnhancementValue.textContent = viewState.isExtensionMode
+    ? t('options.metricEnhancementEnabled')
+    : t('options.metricEnhancementLimited');
 
   els.historySummary.textContent = viewState.backupCount > 0
     ? t('options.historyCount', { count: viewState.backupCount })
