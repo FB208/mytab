@@ -66,7 +66,12 @@ const els = {
   backupLatestValue: document.getElementById('backup-latest-value'),
   toolsAvailabilityBadge: document.getElementById('tools-availability-badge'),
   toolsAvailabilityValue: document.getElementById('tools-availability-value'),
-  toolsEnhancementValue: document.getElementById('tools-enhancement-value')
+  toolsEnhancementValue: document.getElementById('tools-enhancement-value'),
+  syncPanel: document.getElementById('panel-sync'),
+  backupPanel: document.getElementById('panel-backup'),
+  appearancePanel: document.getElementById('panel-appearance'),
+  toolsPanel: document.getElementById('panel-tools'),
+  historyPanel: document.getElementById('panel-history')
 };
 
 const viewState = {
@@ -83,6 +88,11 @@ function setStatusChip(el, text, tone = 'neutral') {
   if (!el) return;
   el.className = `status-chip status-${tone}`;
   el.textContent = text;
+}
+
+function setPanelTone(el, tone = 'neutral') {
+  if (!el) return;
+  el.dataset.tone = tone;
 }
 
 function getLocaleLabel(locale) {
@@ -290,6 +300,12 @@ function renderDashboard() {
   els.toolsEnhancementValue.textContent = viewState.isExtensionMode
     ? t('options.metricEnhancementEnabled')
     : t('options.metricEnhancementLimited');
+
+  setPanelTone(els.syncPanel, sync.tone);
+  setPanelTone(els.backupPanel, backup.tone);
+  setPanelTone(els.appearancePanel, viewState.data?.backgroundImage?.trim() ? 'info' : 'neutral');
+  setPanelTone(els.toolsPanel, toolsTone);
+  setPanelTone(els.historyPanel, viewState.backupCount > 0 ? 'info' : (viewState.settings?.webdav?.url ? 'neutral' : 'warn'));
 
   els.historySummary.textContent = viewState.backupCount > 0
     ? t('options.historyCount', { count: viewState.backupCount })
