@@ -8,88 +8,209 @@
 </head>
 <body>
   <div id="options-root" class="options-app">
-    <div class="options-card glass">
-      <div class="options-topbar">
-        <h2 class="options-title" data-i18n="options.title">设置</h2>
-        <button id="btn-back-home" class="ghost-btn" data-i18n="options.backHome">返回首页</button>
-      </div>
-      <section class="options-section">
-        <div class="options-block">
-          <h3 class="options-block-title" data-i18n="options.webdav">WebDAV</h3>
-          <div class="options-grid-2">
-            <label class="options-field">URL
-              <input id="dav-url" class="search" placeholder="https://dav.example.com/remote.php/dav/files/xxx/mytab/" autocomplete="off" />
-            </label>
-            <label class="options-field"><span data-i18n="options.username">用户名</span>
-              <input id="dav-username" class="search" autocomplete="off" />
-            </label>
-            <label class="options-field"><span data-i18n="options.password">密码</span>
-              <input id="dav-password" class="search" type="password" autocomplete="off" />
-            </label>
-            <label class="options-field"><span data-i18n="options.clientIdentifier">客户端标识</span>
-              <input id="client-identifier" class="search" data-i18n-placeholder="options.clientIdentifierPlaceholder" placeholder="不能含下划线，建议简短" maxlength="20" autocomplete="off" />
-            </label>
-            <label class="options-field"><span data-i18n="options.language">语言</span>
+    <div class="options-card options-console">
+      <header class="options-hero glass">
+        <div class="options-hero-copy">
+          <div class="options-kicker" data-i18n="options.heroEyebrow">设置工作台</div>
+          <h1 class="options-title" data-i18n="options.title">设置</h1>
+          <p class="options-subtitle" data-i18n="options.heroSubtitle">统一管理同步、备份恢复、数据导入与界面个性化。</p>
+        </div>
+        <button id="btn-back-home" class="ghost-btn options-hero-back" data-i18n="options.backHome">返回首页</button>
+      </header>
+
+      <section class="options-overview">
+        <article class="overview-card glass">
+          <div class="overview-card-head">
+            <span class="overview-icon" aria-hidden="true">☁️</span>
+            <span id="summary-sync-badge" class="status-chip status-neutral" data-i18n="options.statusNotConfigured">未配置</span>
+          </div>
+          <div class="overview-label" data-i18n="options.overviewSyncTitle">同步状态</div>
+          <div id="summary-sync-value" class="overview-value" data-i18n="options.statusNotConfigured">未配置</div>
+          <div id="summary-sync-meta" class="overview-meta" data-i18n="options.summarySyncMetaEmpty">填写 WebDAV 后启用云端能力</div>
+        </article>
+
+        <article class="overview-card glass">
+          <div class="overview-card-head">
+            <span class="overview-icon" aria-hidden="true">⏱️</span>
+            <span id="summary-backup-badge" class="status-chip status-neutral" data-i18n="options.statusDisabled">已关闭</span>
+          </div>
+          <div class="overview-label" data-i18n="options.overviewBackupTitle">备份策略</div>
+          <div id="summary-backup-value" class="overview-value" data-i18n="options.statusDisabled">已关闭</div>
+          <div id="summary-backup-meta" class="overview-meta" data-i18n="options.summaryBackupMetaDisabled">仅保留手动与操作触发的备份</div>
+        </article>
+
+        <article class="overview-card glass">
+          <div class="overview-card-head">
+            <span class="overview-icon" aria-hidden="true">🕘</span>
+            <span id="summary-latest-badge" class="status-chip status-neutral" data-i18n="options.noBackups">暂无备份</span>
+          </div>
+          <div class="overview-label" data-i18n="options.overviewLatestTitle">最近备份</div>
+          <div id="summary-latest-value" class="overview-value" data-i18n="options.noBackups">暂无备份</div>
+          <div id="summary-latest-meta" class="overview-meta" data-i18n="options.summaryLatestMetaEmpty">恢复列表会在这里显示</div>
+        </article>
+
+        <article class="overview-card glass">
+          <div class="overview-card-head">
+            <span class="overview-icon" aria-hidden="true">🌐</span>
+            <span id="summary-language-badge" class="status-chip status-info" data-i18n="locale.auto">跟随浏览器</span>
+          </div>
+          <div class="overview-label" data-i18n="options.overviewLanguageTitle">当前语言</div>
+          <div id="summary-language-value" class="overview-value" data-i18n="locale.auto">跟随浏览器</div>
+          <div id="summary-language-meta" class="overview-meta" data-i18n="options.summaryLanguageMetaAuto">当前跟随浏览器界面语言</div>
+        </article>
+      </section>
+
+      <div class="options-workspace">
+        <main class="options-main">
+          <section class="options-panel options-panel-sync glass">
+            <div class="panel-header">
+              <div class="panel-header-copy">
+                <div class="panel-kicker" data-i18n="options.panelSyncKicker">同步中心</div>
+                <h2 class="panel-title" data-i18n="options.panelSyncTitle">同步与连接</h2>
+                <p class="panel-desc" data-i18n="options.panelSyncDesc">连接 WebDAV 后，备份、历史恢复和云端同步会统一从这里生效。</p>
+              </div>
+              <span id="webdav-status-badge" class="status-chip status-neutral" data-i18n="options.statusNotConfigured">未配置</span>
+            </div>
+
+            <div class="options-grid-2 options-grid-compact">
+              <label class="options-field"><span>URL</span>
+                <input id="dav-url" class="search" placeholder="https://dav.example.com/remote.php/dav/files/xxx/mytab/" autocomplete="off" />
+              </label>
+              <label class="options-field"><span data-i18n="options.username">用户名</span>
+                <input id="dav-username" class="search" autocomplete="off" />
+              </label>
+              <label class="options-field"><span data-i18n="options.password">密码</span>
+                <input id="dav-password" class="search" type="password" autocomplete="off" />
+              </label>
+              <label class="options-field"><span data-i18n="options.clientIdentifier">客户端标识</span>
+                <input id="client-identifier" class="search" data-i18n-placeholder="options.clientIdentifierPlaceholder" placeholder="不能含下划线，建议简短" maxlength="20" autocomplete="off" />
+              </label>
+            </div>
+
+            <div class="panel-footer">
+              <p class="panel-note" data-i18n="options.webdavFootnote">仅在保存配置时申请站点权限，用于测试连接与上传下载备份。</p>
+              <div class="options-actions">
+                <button id="btn-test" class="ghost-btn" data-i18n="options.testConnection">测试连接</button>
+                <button id="btn-save" class="primary-btn" data-i18n="common.save">保存</button>
+              </div>
+            </div>
+          </section>
+
+          <section class="options-panel options-panel-backup glass">
+            <div class="panel-header">
+              <div class="panel-header-copy">
+                <div class="panel-kicker" data-i18n="options.panelBackupKicker">备份策略</div>
+                <h2 class="panel-title" data-i18n="options.panelBackupTitle">备份与恢复策略</h2>
+                <p class="panel-desc" data-i18n="options.panelBackupDesc">把自动快照、手动备份和云端检查集中在一起，保持你的数据始终可回滚。</p>
+              </div>
+              <span id="backup-status-badge" class="status-chip status-neutral" data-i18n="options.statusDisabled">已关闭</span>
+            </div>
+
+            <div class="strategy-toggle glass">
+              <div class="strategy-toggle-copy">
+                <div class="strategy-toggle-title" data-i18n="options.backupAutoTitle">自动备份</div>
+                <p class="strategy-toggle-desc" data-i18n="options.backupAutoDesc">所有数据变更仍会自动防抖备份，这里决定是否额外生成定时快照。</p>
+              </div>
+              <label class="toggle-switch" for="backup-enabled">
+                <input type="checkbox" id="backup-enabled" />
+                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+              </label>
+            </div>
+
+            <div class="options-grid-2 options-grid-compact">
+              <label class="options-field"><span data-i18n="options.frequencyHours">频率（小时）</span>
+                <input id="backup-hours" class="search options-input-sm" type="number" min="0.25" step="0.25" autocomplete="off" />
+              </label>
+              <label class="options-field"><span data-i18n="options.historyLimit">历史上限</span>
+                <input id="backup-max" class="search options-input-sm" type="number" min="1" step="1" autocomplete="off" />
+              </label>
+            </div>
+
+            <div class="panel-footer panel-footer-actions-only">
+              <div class="options-actions">
+                <button id="btn-backup-now" class="primary-btn" data-i18n="options.backupNow">立即备份</button>
+                <button id="btn-check-cloud" class="ghost-btn" data-i18n="options.checkCloudUpdates">检查云端更新</button>
+              </div>
+            </div>
+          </section>
+        </main>
+
+        <aside class="options-side">
+          <section class="options-panel options-panel-appearance glass">
+            <div class="panel-header panel-header-tight">
+              <div class="panel-header-copy">
+                <div class="panel-kicker" data-i18n="options.panelAppearanceKicker">个性化</div>
+                <h2 class="panel-title" data-i18n="options.panelAppearanceTitle">界面与个性化</h2>
+                <p class="panel-desc" data-i18n="options.panelAppearanceDesc">语言和背景会立即影响首页与设置页体验。</p>
+              </div>
+            </div>
+
+            <div class="options-field">
+              <span data-i18n="options.language">语言</span>
               <select id="language-mode" class="search">
                 <option value="auto" data-i18n="locale.auto">跟随浏览器</option>
                 <option value="zh-CN" data-i18n="locale.zhCN">简体中文</option>
                 <option value="en" data-i18n="locale.en">English</option>
               </select>
-            </label>
-            <div class="options-actions">
-              <button id="btn-test" class="primary-btn" data-i18n="options.testConnection">测试连接</button>
-              <button id="btn-save" class="ghost-btn" data-i18n="common.save">保存</button>
             </div>
-          </div>
-        </div>
 
-        <div class="options-block">
-          <h3 class="options-block-title" data-i18n="options.scheduledBackup">定时备份</h3>
-          <div class="options-row">
-            <label class="options-inline"><input type="checkbox" id="backup-enabled" /> <span data-i18n="options.backupEnabled">开启定时备份(所有操作均会自动备份，可以不开启定时备份)</span></label>
-          </div>
-          <div class="options-row">
-            <label class="options-field"><span data-i18n="options.frequencyHours">频率（小时）</span>
-              <input id="backup-hours" class="search options-input-sm" type="number" min="0.25" step="0.25" autocomplete="off" />
-            </label>
-            <label class="options-field"><span data-i18n="options.historyLimit">历史上限</span>
-              <input id="backup-max" class="search options-input-sm" type="number" min="1" step="1" autocomplete="off" />
-            </label>
-          </div>
-          <div class="options-row">
-            <button id="btn-backup-now" class="primary-btn" data-i18n="options.backupNow">立即备份</button>
-            <button id="btn-check-cloud" class="ghost-btn" data-i18n="options.checkCloudUpdates">检查云端更新</button>
-          </div>
-        </div>
+            <div id="bg-preview" class="background-preview glass">
+              <div class="background-preview-overlay">
+                <div class="background-preview-label" data-i18n="options.backgroundPreview">背景预览</div>
+                <div id="bg-preview-text" class="background-preview-text" data-i18n="options.previewDefaultBackground">当前使用默认背景</div>
+              </div>
+            </div>
 
-        <div class="options-block">
-          <h3 class="options-block-title" data-i18n="options.dataImport">数据导入</h3>
-          <div class="options-row options-row-split">
-            <button id="btn-import-bookmarks" class="primary-btn import-btn" data-i18n="options.importBrowserBookmarks">导入浏览器书签</button>
+            <div class="options-field">
+              <span data-i18n="options.backgroundImage">背景图片</span>
+              <input id="bg-url" class="search options-wide" data-i18n-placeholder="options.backgroundUrlPlaceholder" placeholder="输入图片 URL" autocomplete="off" />
+            </div>
+
+            <div class="panel-footer panel-footer-actions-only">
+              <div class="options-actions">
+                <button id="btn-bg-save" class="ghost-btn" data-i18n="options.saveBackground">保存背景</button>
+              </div>
+            </div>
+          </section>
+
+          <section class="options-panel options-panel-tools glass">
+            <div class="panel-header panel-header-tight">
+              <div class="panel-header-copy">
+                <div class="panel-kicker" data-i18n="options.panelToolsKicker">数据工具</div>
+                <h2 class="panel-title" data-i18n="options.panelToolsTitle">导入与整理</h2>
+                <p class="panel-desc" data-i18n="options.panelToolsDesc">导入浏览器书签，并在增强流程中补齐标题与图标。</p>
+              </div>
+            </div>
+
+            <button id="btn-import-bookmarks" class="primary-btn import-btn options-action-block" data-i18n="options.importBrowserBookmarks">导入浏览器书签</button>
+
             <div class="options-help">
-              <h4 style="margin: 0 0 8px 0; color: var(--text-primary);" data-i18n="options.importFeatureTitle">功能说明</h4>
+              <h4 data-i18n="options.importFeatureTitle">功能说明</h4>
               <p data-i18n="options.importFeatureDesc">将浏览器书签导入到本插件中，完整保持文件夹层级结构。导入过程中会显示详细的进度信息，包括当前处理的网站和完成百分比。</p>
-
             </div>
-          </div>
-        </div>
 
-        <div class="options-block">
-          <h3 class="options-block-title" data-i18n="options.backgroundImage">背景图片</h3>
-          <div class="options-row">
-            <input id="bg-url" class="search options-wide" data-i18n-placeholder="options.backgroundUrlPlaceholder" placeholder="输入图片 URL" autocomplete="off" />
-            <button id="btn-bg-save" class="ghost-btn" data-i18n="options.saveBackground">保存背景</button>
-          </div>
-        </div>
+            <ul class="feature-list">
+              <li data-i18n="options.importToolPoint1">完整保留浏览器书签的文件夹层级</li>
+              <li data-i18n="options.importToolPoint2">可选择增强导入，自动补齐标题与图标</li>
+              <li data-i18n="options.importToolPoint3">导入过程中持续展示进度与结果</li>
+            </ul>
+          </section>
+        </aside>
+      </div>
 
-        <div class="options-block">
-          <h3 class="options-block-title" data-i18n="options.historyWebdav">历史记录（WebDAV）</h3>
-          <div class="options-row">
+      <section class="options-panel options-panel-history glass">
+        <div class="panel-header">
+          <div class="panel-header-copy">
+            <div class="panel-kicker" data-i18n="options.panelHistoryKicker">备份历史</div>
+            <h2 class="panel-title" data-i18n="options.panelHistoryTitle">历史快照</h2>
+            <p class="panel-desc" data-i18n="options.panelHistoryDesc">所有可恢复快照统一展示在这里，方便快速回滚到任意时间点。</p>
+          </div>
+          <div class="panel-header-actions">
+            <div id="history-summary" class="panel-header-meta" data-i18n="options.noBackups">暂无备份</div>
             <button id="btn-refresh-list" class="ghost-btn" data-i18n="options.refreshList">刷新列表</button>
           </div>
-          <ul id="backup-list" class="options-list"></ul>
         </div>
-
+        <ul id="backup-list" class="options-list"></ul>
       </section>
     </div>
   </div>

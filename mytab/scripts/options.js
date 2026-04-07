@@ -11,7 +11,6 @@
 // 导入存储管理模块
 import { readAll, writeSettings, writeData } from './storage.js';
 import {
-  escapeHtml,
   formatDateTime,
   initPageI18n,
   resolveLocale,
@@ -41,8 +40,238 @@ const els = {
   list: document.getElementById('backup-list'),     // 备份历史列表容器
   importBookmarks: document.getElementById('btn-import-bookmarks'), // 导入书签按钮
   bgUrl: document.getElementById('bg-url'),          // 背景图片URL输入框
-  bgSave: document.getElementById('btn-bg-save')    // 保存背景按钮
+  bgSave: document.getElementById('btn-bg-save'),    // 保存背景按钮
+  webdavStatusBadge: document.getElementById('webdav-status-badge'),
+  backupStatusBadge: document.getElementById('backup-status-badge'),
+  historySummary: document.getElementById('history-summary'),
+  bgPreview: document.getElementById('bg-preview'),
+  bgPreviewText: document.getElementById('bg-preview-text'),
+  summarySyncValue: document.getElementById('summary-sync-value'),
+  summarySyncMeta: document.getElementById('summary-sync-meta'),
+  summarySyncBadge: document.getElementById('summary-sync-badge'),
+  summaryBackupValue: document.getElementById('summary-backup-value'),
+  summaryBackupMeta: document.getElementById('summary-backup-meta'),
+  summaryBackupBadge: document.getElementById('summary-backup-badge'),
+  summaryLatestValue: document.getElementById('summary-latest-value'),
+  summaryLatestMeta: document.getElementById('summary-latest-meta'),
+  summaryLatestBadge: document.getElementById('summary-latest-badge'),
+  summaryLanguageValue: document.getElementById('summary-language-value'),
+  summaryLanguageMeta: document.getElementById('summary-language-meta'),
+  summaryLanguageBadge: document.getElementById('summary-language-badge')
 };
+
+const viewState = {
+  settings: null,
+  data: null,
+  latestBackup: null,
+  backupCount: 0,
+  connectionStatus: 'notConfigured',
+  connectionError: ''
+};
+
+function setStatusChip(el, text, tone = 'neutral') {
+  if (!el) return;
+  el.className = `status-chip status-${tone}`;
+  el.textContent = text;
+}
+
+function getLocaleLabel(locale) {
+  return locale === 'zh-CN' ? t('locale.zhCN') : t('locale.en');
+}
+
+function getLocaleModeLabel(mode) {
+  if (mode === 'zh-CN') return t('locale.zhCN');
+  if (mode === 'en') return t('locale.en');
+  return t('locale.auto');
+}
+
+function getWebdavHost(url) {
+  try {
+    return new URL(url).host;
+  } catch (e) {
+    return url || '';
+  }
+}
+
+function getBackupTypeLabel(fileName) {
+  if (fileName.includes('_sync_backup_')) return t('options.backupTypeSync');
+  if (fileName.includes('_schedule_')) return t('common.scheduled');
+  if (fileName.includes('_user_')) return t('common.manual');
+  if (fileName.includes('_handle_')) return t('common.auto');
+  return t('options.backupTypeSnapshot');
+}
+
+function renderEmptyHistory(message, detail = '') {
+  els.list.innerHTML = '';
+
+  const item = document.createElement('li');
+  item.className = 'options-empty-state glass';
+
+  const title = document.createElement('div');
+  title.className = 'options-empty-title';
+  title.textContent = message;
+
+  item.appendChild(title);
+
+  if (detail) {
+    const desc = document.createElement('div');
+    desc.className = 'options-empty-desc';
+    desc.textContent = detail;
+    item.appendChild(desc);
+  }
+
+  els.list.appendChild(item);
+}
+
+function renderBackgroundPreview() {
+  if (!els.bgPreview || !els.bgPreviewText) return;
+
+  const backgroundUrl = viewState.data?.backgroundImage?.trim();
+  if (backgroundUrl) {
+    els.bgPreview.style.backgroundImage = `url("${backgroundUrl}")`;
+    els.bgPreviewText.textContent = t('options.previewCustomBackground');
+  } else {
+    els.bgPreview.style.backgroundImage = '';
+    els.bgPreviewText.textContent = t('options.previewDefaultBackground');
+  }
+}
+
+function getSyncPresentation() {
+  const hasConfig = Boolean(viewState.settings?.webdav?.url);
+  const host = getWebdavHost(viewState.settings?.webdav?.url || '');
+
+  if (!hasConfig) {
+    return {
+      tone: 'neutral',
+      text: t('options.statusNotConfigured'),
+      meta: t('options.summarySyncMetaEmpty')
+    };
+  }
+
+  switch (viewState.connectionStatus) {
+    case 'checking':
+      return {
+        tone: 'info',
+        text: t('options.statusChecking'),
+        meta: t('options.summarySyncMetaChecking', { host })
+      };
+    case 'readWrite':
+      return {
+        tone: 'success',
+        text: t('options.statusReadWrite'),
+        meta: t('options.summarySyncMetaReadWrite', { host })
+      };
+    case 'readOnly':
+      return {
+        tone: 'warn',
+        text: t('options.statusReadOnly'),
+        meta: t('options.summarySyncMetaReadOnly', { host })
+      };
+    case 'failed':
+      return {
+        tone: 'danger',
+        text: t('options.statusFailed'),
+        meta: viewState.connectionError || t('options.summarySyncMetaFailed', { host })
+      };
+    default:
+      return {
+        tone: 'info',
+        text: t('options.statusConfigured'),
+        meta: t('options.summarySyncMetaConfigured', { host })
+      };
+  }
+}
+
+function getBackupPresentation() {
+  const enabled = Boolean(viewState.settings?.backup?.enabled);
+  const hours = viewState.settings?.backup?.frequencyHours ?? 4;
+
+  return enabled
+    ? {
+        tone: 'success',
+        text: t('options.statusEnabled'),
+        meta: t('options.summaryBackupMetaEnabled', { hours })
+      }
+    : {
+        tone: 'neutral',
+        text: t('options.statusDisabled'),
+        meta: t('options.summaryBackupMetaDisabled')
+      };
+}
+
+function getLatestBackupPresentation() {
+  if (!viewState.settings?.webdav?.url) {
+    return {
+      tone: 'neutral',
+      text: t('options.noBackups'),
+      badge: t('options.statusNotConfigured'),
+      meta: t('options.historyAwaitingConfig')
+    };
+  }
+
+  if (!viewState.latestBackup) {
+    return {
+      tone: 'neutral',
+      text: t('options.noBackups'),
+      badge: t('options.noBackups'),
+      meta: t('options.summaryLatestMetaEmpty')
+    };
+  }
+
+  return {
+    tone: 'info',
+    text: formatDateTime(viewState.latestBackup.lastmod),
+    badge: getBackupTypeLabel(viewState.latestBackup.name),
+    meta: t('options.summaryLatestMetaCount', { count: viewState.backupCount })
+  };
+}
+
+function getLanguagePresentation() {
+  const mode = viewState.settings?.locale?.mode || 'auto';
+  const resolved = resolveLocale(mode);
+  const resolvedLabel = getLocaleLabel(resolved);
+
+  return {
+    tone: mode === 'auto' ? 'info' : 'neutral',
+    text: getLocaleModeLabel(mode),
+    meta: mode === 'auto'
+      ? t('options.summaryLanguageMetaAuto', { locale: resolvedLabel })
+      : t('options.summaryLanguageMetaManual', { locale: resolvedLabel })
+  };
+}
+
+function renderDashboard() {
+  if (!viewState.settings) return;
+
+  const sync = getSyncPresentation();
+  const backup = getBackupPresentation();
+  const latest = getLatestBackupPresentation();
+  const language = getLanguagePresentation();
+
+  setStatusChip(els.webdavStatusBadge, sync.text, sync.tone);
+  setStatusChip(els.summarySyncBadge, sync.text, sync.tone);
+  els.summarySyncValue.textContent = sync.text;
+  els.summarySyncMeta.textContent = sync.meta;
+
+  setStatusChip(els.backupStatusBadge, backup.text, backup.tone);
+  setStatusChip(els.summaryBackupBadge, backup.text, backup.tone);
+  els.summaryBackupValue.textContent = backup.text;
+  els.summaryBackupMeta.textContent = backup.meta;
+
+  setStatusChip(els.summaryLatestBadge, latest.badge, latest.tone);
+  els.summaryLatestValue.textContent = latest.text;
+  els.summaryLatestMeta.textContent = latest.meta;
+
+  setStatusChip(els.summaryLanguageBadge, language.text, language.tone);
+  els.summaryLanguageValue.textContent = language.text;
+  els.summaryLanguageMeta.textContent = language.meta;
+
+  els.historySummary.textContent = viewState.backupCount > 0
+    ? t('options.historyCount', { count: viewState.backupCount })
+    : (viewState.settings?.webdav?.url ? t('options.noBackups') : t('options.historyAwaitingConfig'));
+
+  renderBackgroundPreview();
+}
 
 // 初始化页面
 await init();
@@ -120,6 +349,12 @@ async function init() {
   els.bgUrl.value = (data.backgroundImage && data.backgroundImage.trim()) || '';
   els.bgUrl.placeholder = t('options.backgroundUrlHint');
 
+  viewState.settings = settings;
+  viewState.data = data;
+  viewState.connectionStatus = settings.webdav?.url ? 'configured' : 'notConfigured';
+  viewState.connectionError = '';
+  renderDashboard();
+
   // 绑定事件监听器
   bind();
   
@@ -152,6 +387,24 @@ function bind() {
     }
   });
 
+  const updateDraftBackupSummary = () => {
+    if (!viewState.settings) return;
+    viewState.settings = {
+      ...viewState.settings,
+      backup: {
+        ...viewState.settings.backup,
+        enabled: els.enabled.checked,
+        frequencyHours: Number(els.hours.value) || 4,
+        maxSnapshots: Math.max(1, Number(els.max.value) || 100)
+      }
+    };
+    renderDashboard();
+  };
+
+  els.enabled?.addEventListener('change', updateDraftBackupSummary);
+  els.hours?.addEventListener('input', updateDraftBackupSummary);
+  els.max?.addEventListener('input', updateDraftBackupSummary);
+
   els.language?.addEventListener('change', async (e) => {
     const { settings } = await readAll();
     const nextSettings = {
@@ -162,9 +415,11 @@ function bind() {
     };
 
     await writeSettings(nextSettings);
+    viewState.settings = nextSettings;
     setCurrentLocale(resolveLocale(nextSettings.locale.mode));
     await initPageI18n();
     els.bgUrl.placeholder = t('options.backgroundUrlHint');
+    renderDashboard();
     await refreshList();
   });
 
@@ -209,6 +464,10 @@ function bind() {
       
       // 保存到存储
       await writeSettings(next);
+      viewState.settings = next;
+      viewState.connectionStatus = next.webdav?.url ? 'configured' : 'notConfigured';
+      viewState.connectionError = '';
+      renderDashboard();
       
       // 清除WebDAV验证缓存，因为配置可能已更改
       try {
@@ -237,6 +496,13 @@ function bind() {
     };
     
     try {
+      if (!config.url) {
+        viewState.connectionStatus = 'notConfigured';
+        viewState.connectionError = '';
+        renderDashboard();
+        toast(`❌ ${t('webdav.notConfigured')}`);
+        return;
+      }
 
       const webdavUrl = normalizeUrl(els.url.value);
       if (webdavUrl && webdavUrl.trim()) {
@@ -248,19 +514,30 @@ function bind() {
         }
       }
 
+      viewState.connectionStatus = config.url ? 'checking' : 'notConfigured';
+      viewState.connectionError = '';
+      renderDashboard();
       toast(t('options.testingConnection'));
       const res = await chrome.runtime.sendMessage({ type: 'webdav:test', config });
       
       if (res?.ok) {
         if (res.canWrite) {
+          viewState.connectionStatus = 'readWrite';
           toast(t('options.connectionSuccessReadWrite'));
         } else {
+          viewState.connectionStatus = 'readOnly';
           toast(t('options.connectionSuccessReadOnly'));
         }
       } else {
+        viewState.connectionStatus = 'failed';
+        viewState.connectionError = res?.error || t('options.connectionFailed');
         toast(`❌ ${res?.error || t('options.connectionFailed')}`);
       }
+      renderDashboard();
     } catch (e) {
+      viewState.connectionStatus = 'failed';
+      viewState.connectionError = e.message || String(e);
+      renderDashboard();
       toast(t('options.testException', { message: e.message }));
     }
   });
@@ -372,6 +649,8 @@ function bind() {
     const { data } = await readAll();
     data.backgroundImage = els.bgUrl.value.trim();
     await writeData(data);
+    viewState.data = data;
+    renderDashboard();
     toast(t('options.backgroundSaved'));
   });
 }
@@ -381,23 +660,31 @@ function bind() {
  * 从WebDAV服务器获取备份文件列表并显示
  */
 async function refreshList() {
+  if (!viewState.settings?.webdav?.url) {
+    viewState.latestBackup = null;
+    viewState.backupCount = 0;
+    renderDashboard();
+    renderEmptyHistory(t('options.noBackups'), t('options.historyAwaitingConfig'));
+    return;
+  }
+
   try {
-    // 显示加载状态
-    els.list.innerHTML = t('common.loading');
+    renderEmptyHistory(t('common.loading'));
     
     // 请求后台获取备份列表
     const res = await chrome.runtime.sendMessage({ type: 'backup:list' });
     if (!res?.ok) throw new Error(res?.error || '');
     
-    const items = res.list || [];
+    const items = (res.list || []).slice().sort((a, b) => b.lastmod - a.lastmod);
+    viewState.latestBackup = items[0] || null;
+    viewState.backupCount = items.length;
+    renderDashboard();
+
     els.list.innerHTML = '';
     
     // 处理空列表情况
     if (items.length === 0) {
-      const empty = document.createElement('li');
-      empty.textContent = t('options.noBackups');
-      empty.style.opacity = '.65';
-      els.list.appendChild(empty);
+      renderEmptyHistory(t('options.noBackups'), t('options.summaryLatestMetaEmpty'));
       return;
     }
     
@@ -406,8 +693,23 @@ async function refreshList() {
       const li = document.createElement('li');
       li.className = 'glass';
 
+      const mainDiv = document.createElement('div');
+      mainDiv.className = 'backup-item-main';
+
+      const headDiv = document.createElement('div');
+      headDiv.className = 'backup-item-head';
+
       const nameSpan = document.createElement('span');
+      nameSpan.className = 'backup-item-name';
       nameSpan.textContent = item.name;
+
+      const tagSpan = document.createElement('span');
+      tagSpan.className = 'backup-tag';
+      tagSpan.textContent = getBackupTypeLabel(item.name);
+
+      headDiv.appendChild(nameSpan);
+      headDiv.appendChild(tagSpan);
+      mainDiv.appendChild(headDiv);
 
       const footerDiv = document.createElement('div');
       footerDiv.className = 'backup-item-footer';
@@ -440,13 +742,16 @@ async function refreshList() {
       footerDiv.appendChild(dateSpan);
       footerDiv.appendChild(btn);
       
-      li.appendChild(nameSpan);
+      li.appendChild(mainDiv);
       li.appendChild(footerDiv);
 
       els.list.appendChild(li);
     });
   } catch (e) {
-    els.list.innerHTML = t('options.loadFailed', { message: String(e?.message || e) });
+    viewState.latestBackup = null;
+    viewState.backupCount = 0;
+    renderDashboard();
+    renderEmptyHistory(t('options.loadFailed', { message: String(e?.message || e) }));
   }
 }
 
