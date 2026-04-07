@@ -1,3 +1,5 @@
+import { t } from './i18n.js';
+
 /**
  * WebDAV 性能日志工具
  * 用于记录和输出操作耗时
@@ -287,14 +289,14 @@ export class WebDAVClient {
     
     try {
       if (!this.url) {
-        throw new Error('未配置 WebDAV URL');
+          throw new Error(t('webdav.notConfigured'));
       }
       
       // 1. 验证URL格式
       try {
         new URL(this.url);
       } catch {
-        throw new Error('URL格式无效');
+          throw new Error(t('webdav.invalidUrl'));
       }
       
       // 2. 快速HEAD请求检测服务器可达性
@@ -309,19 +311,19 @@ export class WebDAVClient {
         
         // 严格检查认证错误
         if (headRes.status === 401) {
-          throw new Error('认证失败：用户名或密码错误');
+          throw new Error(t('webdav.authFailed'));
         }
         if (headRes.status === 403) {
-          throw new Error('权限拒绝：无访问权限');
+          throw new Error(t('webdav.permissionDenied'));
         }
         if (headRes.status >= 400) {
-          throw new Error(`服务器错误：${headRes.status} ${headRes.statusText}`);
+          throw new Error(t('webdav.serverError', { status: headRes.status, statusText: headRes.statusText }));
         }
         
       } catch (e) {
         headTimer(null, e);
         if (e.message.includes('Failed to fetch') || e.message.includes('NetworkError')) {
-          throw new Error('网络错误：无法连接到服务器');
+          throw new Error(t('webdav.networkError'));
         }
         throw e;
       }
@@ -342,14 +344,14 @@ export class WebDAVClient {
         propfindTimer({ status: propfindRes.status });
         
         if (propfindRes.status === 401) {
-          throw new Error('WebDAV认证失败：用户名或密码错误');
+          throw new Error(t('webdav.webdavAuthFailed'));
         }
         if (propfindRes.status === 403) {
-          throw new Error('WebDAV权限拒绝：无目录访问权限');
+          throw new Error(t('webdav.webdavPermissionDenied'));
         }
         if (propfindRes.status >= 400 && propfindRes.status !== 405) {
           // 405 Method Not Allowed 可以接受，表示服务器支持但禁用了PROPFIND
-          throw new Error(`WebDAV错误：${propfindRes.status}`);
+          throw new Error(t('webdav.webdavError', { status: propfindRes.status }));
         }
         
       } catch (e) {
@@ -430,7 +432,7 @@ export class WebDAVClient {
         
         fetchTimer({ status: res.status });
         
-        if (res.status >= 400) throw new Error(`列举失败: ${res.status}`);
+        if (res.status >= 400) throw new Error(t('webdav.listFailed', { status: res.status }));
         
         // 解析 XML 响应
         const parseTimer = WebDAVLogger.time('XML 解析');

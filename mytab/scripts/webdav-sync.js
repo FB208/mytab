@@ -1,3 +1,5 @@
+import { formatDateTime, t } from './i18n.js';
+
 /**
  * WebDAV 同步共享模块
  * 提供 Chrome 扩展和 Web 版本共用的 WebDAV 同步功能
@@ -172,7 +174,7 @@ export async function checkCloudData({ localData, settings, createClient }) {
     // 时间戳提取失败处理
     if (!cloudTimestamp) {
       console.warn('无法从文件名提取时间戳:', latestCloudFile.name);
-      return { hasNewerData: false, error: '无法解析文件名时间戳' };
+      return { hasNewerData: false, error: t('webdav.timestampParseFailed') };
     }
     
     // 计算时间戳差异，判断是否需要同步
@@ -186,8 +188,8 @@ export async function checkCloudData({ localData, settings, createClient }) {
       本地时间戳: localTimestamp,
       时间差异: timeDiff,
       阈值: threshold,
-      云端时间: new Date(cloudTimestamp).toLocaleString('zh-CN'),
-      本地时间: new Date(localTimestamp).toLocaleString('zh-CN'),
+      云端时间: formatDateTime(cloudTimestamp),
+      本地时间: formatDateTime(localTimestamp),
       需要同步: timeDiff > threshold
     });
     
@@ -197,9 +199,9 @@ export async function checkCloudData({ localData, settings, createClient }) {
       return {
         hasNewerData: true,
         cloudFile: latestCloudFile,
-        cloudTime: new Date(cloudTimestamp).toLocaleString(),
-        localTime: new Date(localTimestamp).toLocaleString(),
-        timeDifference: Math.round(timeDiff / 1000) + '秒'
+        cloudTime: formatDateTime(cloudTimestamp),
+        localTime: formatDateTime(localTimestamp),
+        timeDifference: t('webdav.secondsDiff', { seconds: Math.round(timeDiff / 1000) })
       };
     }
     
@@ -235,7 +237,7 @@ export async function syncFromCloudData({
   try {
     // 验证WebDAV配置
     if (!settings?.webdav?.url) {
-      throw new Error('WebDAV未配置');
+      throw new Error(t('webdav.notEnabled'));
     }
     
     // 初始化WebDAV客户端

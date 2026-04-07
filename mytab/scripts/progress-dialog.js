@@ -3,6 +3,8 @@
  * 用于显示书签导入过程中的实时进度信息
  */
 
+import { t } from './i18n.js';
+
 export class ProgressDialog {
   constructor(container = document.body) {
     this.container = container;
@@ -54,7 +56,7 @@ export class ProgressDialog {
 
     // 标题
     const title = document.createElement('h3');
-    title.textContent = '正在导入书签 - 增强模式';
+    title.textContent = t('progress.title');
     title.style.margin = '0 0 20px 0';
     title.style.fontSize = '18px';
     title.style.fontWeight = '600';
@@ -95,7 +97,7 @@ export class ProgressDialog {
 
 
     this.currentUrlText = document.createElement('div');
-    this.currentUrlText.textContent = '正在初始化导入过程...';
+    this.currentUrlText.textContent = t('progress.initialStatus');
     this.currentUrlText.style.fontSize = '13px';
     this.currentUrlText.style.color = 'var(--text)';
     this.currentUrlText.style.wordBreak = 'break-all';
@@ -107,7 +109,7 @@ export class ProgressDialog {
 
     // 统计信息显示
     this.statsText = document.createElement('div');
-    this.statsText.textContent = '增强成功: 0 | 增强失败: 0 | 缓存命中: 0';
+    this.statsText.textContent = t('progress.initialStats');
     this.statsText.style.fontSize = '12px';
     this.statsText.style.color = 'var(--text-dim)';
     this.statsText.style.textAlign = 'center';
@@ -118,7 +120,7 @@ export class ProgressDialog {
 
     // 提示信息：失败的书签也会被导入
     const noticeText = document.createElement('div');
-    noticeText.textContent = '提示：失败的书签也会被导入，失败仅代表该书签无法通过互联网访问，没有获取到标题和图标';
+    noticeText.textContent = t('progress.notice');
     noticeText.style.fontSize = '13px';
     noticeText.style.color = '#4b5563';
     noticeText.style.textAlign = 'center';
@@ -139,7 +141,7 @@ export class ProgressDialog {
     // 取消按钮
     this.cancelBtn = document.createElement('button');
     this.cancelBtn.className = 'ghost-btn';
-    this.cancelBtn.textContent = '取消';
+    this.cancelBtn.textContent = t('common.cancel');
     this.cancelBtn.style.minWidth = '80px';
     
     // 取消按钮事件
@@ -198,7 +200,7 @@ export class ProgressDialog {
       let progressText = `${current} / ${total} (${percentage}%)`;
       
       if (timing && timing.estimatedRemainingText) {
-        progressText += ` - 预计剩余: ${timing.estimatedRemainingText}`;
+        progressText += ` - ${t('progress.estimatedRemaining', { time: timing.estimatedRemainingText })}`;
       }
       
       this.progressText.textContent = progressText;
@@ -227,30 +229,30 @@ export class ProgressDialog {
     }
 
     const { successful = 0, failed = 0, processed, cached = 0, errorsByType, concurrencyAdjustments } = stats;
-    let text = `成功: ${successful} | 失败: ${failed}`;
+    let text = t('progress.statsSummary', { successful, failed });
     
     if (cached > 0) {
-      text += ` | 缓存: ${cached}`;
+      text += ` | ${t('progress.statsCache', { cached })}`;
     }
     
     if (typeof processed === 'number') {
-      text += ` | 已处理: ${processed}`;
+      text += ` | ${t('progress.statsProcessed', { processed })}`;
     }
 
     // 显示当前并发数（如果有调整历史）
     if (concurrencyAdjustments && concurrencyAdjustments.length > 0) {
       const lastAdjustment = concurrencyAdjustments[concurrencyAdjustments.length - 1];
-      text += ` | 并发: ${lastAdjustment.to}`;
+      text += ` | ${t('progress.statsConcurrency', { concurrency: lastAdjustment.to })}`;
     }
     
     // 如果有错误分类信息，显示主要错误类型
     if (errorsByType && failed > 0) {
       const mainErrors = [];
-      if (errorsByType.timeout > 0) mainErrors.push(`超时:${errorsByType.timeout}`);
-      if (errorsByType.network > 0) mainErrors.push(`网络:${errorsByType.network}`);
-      if (errorsByType.http4xx > 0) mainErrors.push(`4xx:${errorsByType.http4xx}`);
-      if (errorsByType.http5xx > 0) mainErrors.push(`5xx:${errorsByType.http5xx}`);
-      if (errorsByType.cors > 0) mainErrors.push(`CORS:${errorsByType.cors}`);
+      if (errorsByType.timeout > 0) mainErrors.push(t('progress.errorTimeout', { count: errorsByType.timeout }));
+      if (errorsByType.network > 0) mainErrors.push(t('progress.errorNetwork', { count: errorsByType.network }));
+      if (errorsByType.http4xx > 0) mainErrors.push(t('progress.error4xx', { count: errorsByType.http4xx }));
+      if (errorsByType.http5xx > 0) mainErrors.push(t('progress.error5xx', { count: errorsByType.http5xx }));
+      if (errorsByType.cors > 0) mainErrors.push(t('progress.errorCors', { count: errorsByType.cors }));
       
       if (mainErrors.length > 0) {
         text += ` (${mainErrors.slice(0, 3).join(', ')})`;
@@ -283,12 +285,12 @@ export class ProgressDialog {
 
     // 更新按钮文本
     if (this.cancelBtn) {
-      this.cancelBtn.textContent = '关闭';
+      this.cancelBtn.textContent = t('common.close');
     }
 
     // 更新状态文本
     const duration = finalStats.startTime ? Math.round((Date.now() - finalStats.startTime) / 1000) : 0;
-    this.setCurrentStatus(`导入完成！用时 ${duration} 秒`);
+    this.setCurrentStatus(t('progress.completedIn', { seconds: duration }));
 
     // 更新最终统计
     this.updateStats(finalStats);
@@ -323,7 +325,7 @@ export class ProgressDialog {
     errorSummary.style.border = '1px solid rgba(239, 68, 68, 0.2)';
 
     const errorTitle = document.createElement('div');
-    errorTitle.textContent = '增强失败统计：';
+    errorTitle.textContent = t('progress.errorSummaryTitle');
     errorTitle.style.fontSize = '12px';
     errorTitle.style.fontWeight = '600';
     errorTitle.style.color = '#dc2626';
@@ -337,14 +339,14 @@ export class ProgressDialog {
     const errorTypes = [];
     const { errorsByType } = stats;
     
-    if (errorsByType.timeout > 0) errorTypes.push(`请求超时: ${errorsByType.timeout}个`);
-    if (errorsByType.network > 0) errorTypes.push(`网络错误: ${errorsByType.network}个`);
-    if (errorsByType.http4xx > 0) errorTypes.push(`客户端错误(4xx): ${errorsByType.http4xx}个`);
-    if (errorsByType.http5xx > 0) errorTypes.push(`服务器错误(5xx): ${errorsByType.http5xx}个`);
-    if (errorsByType.cors > 0) errorTypes.push(`跨域限制: ${errorsByType.cors}个`);
-    if (errorsByType.ssl > 0) errorTypes.push(`SSL错误: ${errorsByType.ssl}个`);
-    if (errorsByType.parse > 0) errorTypes.push(`解析错误: ${errorsByType.parse}个`);
-    if (errorsByType.other > 0) errorTypes.push(`其他错误: ${errorsByType.other}个`);
+    if (errorsByType.timeout > 0) errorTypes.push(t('progress.requestTimeout', { count: errorsByType.timeout }));
+    if (errorsByType.network > 0) errorTypes.push(t('progress.networkError', { count: errorsByType.network }));
+    if (errorsByType.http4xx > 0) errorTypes.push(t('progress.clientError4xx', { count: errorsByType.http4xx }));
+    if (errorsByType.http5xx > 0) errorTypes.push(t('progress.serverError5xx', { count: errorsByType.http5xx }));
+    if (errorsByType.cors > 0) errorTypes.push(t('progress.corsLimited', { count: errorsByType.cors }));
+    if (errorsByType.ssl > 0) errorTypes.push(t('progress.sslError', { count: errorsByType.ssl }));
+    if (errorsByType.parse > 0) errorTypes.push(t('progress.parseError', { count: errorsByType.parse }));
+    if (errorsByType.other > 0) errorTypes.push(t('progress.otherError', { count: errorsByType.other }));
 
     errorDetails.textContent = errorTypes.join('，');
 
@@ -368,11 +370,11 @@ export class ProgressDialog {
 
     // 更新按钮文本
     if (this.cancelBtn) {
-      this.cancelBtn.textContent = '关闭';
+      this.cancelBtn.textContent = t('common.close');
     }
 
     // 更新状态文本
-    this.setCurrentStatus(`错误: ${errorMessage}`);
+    this.setCurrentStatus(t('progress.errorPrefix', { message: errorMessage }));
 
     // 将当前URL文本设为红色
     if (this.currentUrlText) {

@@ -11,11 +11,14 @@
 import { DEFAULT_SETTINGS, readAll, writeSettings, isDataEmpty } from '../scripts/storage.js';
 import { WebDAVClient } from '../scripts/webdav.js';
 import { collectFavicons } from '../scripts/favicon-utils.js';
+import { getCurrentLocale, setCurrentLocale, t } from '../scripts/i18n.js';
 import { 
   checkCloudData, 
   syncFromCloudData, 
   doBackupToCloud,
 } from '../scripts/webdav-sync.js';
+
+setCurrentLocale(await getCurrentLocale());
 
 /**
  * 扩展安装/更新时的初始化处理
@@ -36,6 +39,7 @@ chrome.runtime.onInstalled.addListener(async () => {
 chrome.storage.onChanged.addListener(async (changes, area) => {
   // 设置变化：重新配置定时备份
   if (area === 'local' && changes.settings) {
+    setCurrentLocale(await getCurrentLocale());
     await ensureAlarm();
   }
   
@@ -164,16 +168,16 @@ async function doBackup(source = 'manual') {
     // 同步备份不显示通知，避免干扰用户
     if (source !== 'sync_backup') {
       const prefixMap = { 
-        alarm: '定时', 
-        manual: '手动',
-        auto: '自动'
+        alarm: t('common.scheduled'), 
+        manual: t('common.manual'),
+        auto: t('common.auto')
       };
-      const backupType = prefixMap[source] || '手动';
+      const backupType = prefixMap[source] || t('common.manual');
       chrome.notifications.create({
         type: 'basic', 
         iconUrl: 'icon128.png', 
-        title: 'MyTab 备份成功', 
-        message: `${backupType}备份完成`
+        title: t('notification.backupSuccessTitle'), 
+        message: t('notification.backupCompleted', { type: backupType })
       }, () => {});
     }
   } catch (e) {
@@ -183,7 +187,7 @@ async function doBackup(source = 'manual') {
       chrome.notifications.create({
         type: 'basic', 
         iconUrl: 'icon128.png', 
-        title: 'MyTab 备份失败', 
+        title: t('notification.backupFailureTitle'), 
         message: String(e?.message || e)
       }, () => {});
     }
@@ -497,7 +501,7 @@ async function fetchTitlePro(url) {
     let errorMessage = error.message || String(error);
     
     if (error.name === 'AbortError') {
-      errorMessage = `请求超时 (${TIMEOUT_MS}ms)`;
+        errorMessage = t('webdav.requestTimeout', { ms: TIMEOUT_MS });
     }
     
     console.warn('fetchTitlePro 请求异常:', url, errorMessage);

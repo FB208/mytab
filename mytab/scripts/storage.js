@@ -29,8 +29,38 @@ export const DEFAULT_SETTINGS = {
   client: {
     identifier: '' // 客户端标识符，用于区分不同的客户端实例
   },
+  locale: {
+    mode: 'auto'
+  },
   theme: {} // 主题设置（预留）
 };
+
+export function withDefaultSettings(settings) {
+  return {
+    ...DEFAULT_SETTINGS,
+    ...(settings || {}),
+    webdav: {
+      ...DEFAULT_SETTINGS.webdav,
+      ...(settings?.webdav || {})
+    },
+    backup: {
+      ...DEFAULT_SETTINGS.backup,
+      ...(settings?.backup || {})
+    },
+    client: {
+      ...DEFAULT_SETTINGS.client,
+      ...(settings?.client || {})
+    },
+    locale: {
+      ...DEFAULT_SETTINGS.locale,
+      ...(settings?.locale || {})
+    },
+    theme: {
+      ...DEFAULT_SETTINGS.theme,
+      ...(settings?.theme || {})
+    }
+  };
+}
 
 /**
  * 读取所有存储数据（数据和设置）
@@ -46,7 +76,7 @@ export async function readAll() {
   });
   return {
     data,
-    settings
+    settings: withDefaultSettings(settings)
   };
 }
 
@@ -62,7 +92,7 @@ export async function writeAll({
 }) {
   await chrome.storage.local.set({
     data,
-    settings
+    settings: withDefaultSettings(settings)
   });
 }
 
@@ -99,7 +129,7 @@ export async function readSettings() {
   } = await chrome.storage.local.get({
     settings: DEFAULT_SETTINGS
   });
-  return settings;
+  return withDefaultSettings(settings);
 }
 
 /**
@@ -108,7 +138,7 @@ export async function readSettings() {
  */
 export async function writeSettings(settings) {
   await chrome.storage.local.set({
-    settings
+    settings: withDefaultSettings(settings)
   });
 }
 
@@ -252,8 +282,9 @@ export async function ensureInit() {
   } = await readAll();
   
   // 如果设置不存在或缺少backup字段，则初始化默认设置
-  if (!settings || !('backup' in settings)) {
-    await writeSettings(DEFAULT_SETTINGS);
+  const normalizedSettings = withDefaultSettings(settings);
+  if (!settings || JSON.stringify(normalizedSettings) !== JSON.stringify(settings)) {
+    await writeSettings(normalizedSettings);
   }
   
   // 如果数据不存在或缺少folders字段，则初始化默认数据

@@ -1,0 +1,11 @@
+{
+  "extension_name": {
+    "message": "MyTab - WebDAV Bookmark Dashboard"
+  },
+  "extension_description": {
+    "message": "A clean, beautiful, lightweight, and free new tab dashboard with custom WebDAV backup and history restore so your bookmarks never get lost."
+  },
+  "action_title": {
+    "message": "MyTab"
+  }
+}

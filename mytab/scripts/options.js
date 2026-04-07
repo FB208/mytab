@@ -10,6 +10,14 @@
 
 // 导入存储管理模块
 import { readAll, writeSettings, writeData } from './storage.js';
+import {
+  escapeHtml,
+  formatDateTime,
+  initPageI18n,
+  resolveLocale,
+  setCurrentLocale,
+  t
+} from './i18n.js';
 
 /**
  * DOM元素引用映射
@@ -20,6 +28,7 @@ const els = {
   username: document.getElementById('dav-username'), // WebDAV用户名输入框
   password: document.getElementById('dav-password'), // WebDAV密码输入框
   clientIdentifier: document.getElementById('client-identifier'), // 客户端标识输入框
+  language: document.getElementById('language-mode'), // 语言选择框
   backHome: document.getElementById('btn-back-home'), // 返回主页按钮
   enabled: document.getElementById('backup-enabled'),  // 自动备份开关复选框
   hours: document.getElementById('backup-hours'),    // 备份频率输入框（小时）
@@ -75,6 +84,8 @@ window.testImportResultDialog = function() {
  * 3. 加载备份历史列表
  */
 async function init() {
+  await initPageI18n();
+
   // 导入生成客户端标识的函数
   const { generateClientIdentifier } = await import('./storage.js');
   
@@ -97,6 +108,7 @@ async function init() {
     await writeSettings(updatedSettings);
   }
   els.clientIdentifier.value = clientIdentifier;
+  els.language.value = settings.locale?.mode || 'auto';
   
   // 填充自动备份配置
   els.enabled.checked = !!settings.backup?.enabled;
@@ -106,7 +118,7 @@ async function init() {
   // 填充背景图片配置
   // 只有当用户真正设置了背景图片时才显示，否则显示为空（不显示系统默认URL）
   els.bgUrl.value = (data.backgroundImage && data.backgroundImage.trim()) || '';
-  els.bgUrl.placeholder = "请输入背景图片Url（留空则使用默认背景）";
+  els.bgUrl.placeholder = t('options.backgroundUrlHint');
 
   // 绑定事件监听器
   bind();
@@ -140,6 +152,22 @@ function bind() {
     }
   });
 
+  els.language?.addEventListener('change', async (e) => {
+    const { settings } = await readAll();
+    const nextSettings = {
+      ...settings,
+      locale: {
+        mode: e.target.value || 'auto'
+      }
+    };
+
+    await writeSettings(nextSettings);
+    setCurrentLocale(resolveLocale(nextSettings.locale.mode));
+    await initPageI18n();
+    els.bgUrl.placeholder = t('options.backgroundUrlHint');
+    await refreshList();
+  });
+
   /**
    * 保存设置按钮点击事件
    * 收集表单数据并保存到存储中
@@ -152,13 +180,15 @@ function bind() {
         // 申请访问外部URL的权限
         const hasPermission = await requestWebdavPermissions(webdavUrl);
         if (!hasPermission) {
-          toast('需要权限才能保存WebDAV配置');
+          toast(t('options.webdavPermissionRequired'));
           return;
         }
       }
 
       // 构建新的设置对象
+      const { settings: currentSettings } = await readAll();
       const next = {
+        ...currentSettings,
         webdav: { 
           url: webdavUrl, 
           username: els.username.value, 
@@ -171,6 +201,9 @@ function bind() {
         },
         client: {
           identifier: (els.clientIdentifier.value || '').trim() || 'MYTAB'
+        },
+        locale: {
+          mode: els.language.value || currentSettings.locale?.mode || 'auto'
         }
       };
       
@@ -184,11 +217,11 @@ function bind() {
         // 忽略清除缓存的错误
       }
       
-      toast('已保存');
+      toast(t('options.saved'));
       
     } catch (error) {
       console.error('保存设置失败:', error);
-      toast('保存失败: ' + (error.message || error));
+      toast(t('options.saveFailed', { message: error.message || error }));
     }
   });
 
@@ -210,25 +243,25 @@ function bind() {
         // 申请访问外部URL的权限
         const hasPermission = await requestWebdavPermissions(webdavUrl);
         if (!hasPermission) {
-          toast('需要权限才能保存WebDAV配置');
+          toast(t('options.webdavPermissionRequired'));
           return;
         }
       }
 
-      toast('连接测试中...');
+      toast(t('options.testingConnection'));
       const res = await chrome.runtime.sendMessage({ type: 'webdav:test', config });
       
       if (res?.ok) {
         if (res.canWrite) {
-          toast('✅ 连接成功，可读写');
+          toast(t('options.connectionSuccessReadWrite'));
         } else {
-          toast('✅ 连接成功，只读权限');
+          toast(t('options.connectionSuccessReadOnly'));
         }
       } else {
-        toast('❌ ' + (res?.error || '连接失败'));
+        toast(`❌ ${res?.error || t('options.connectionFailed')}`);
       }
     } catch (e) {
-      toast('❌ 测试异常：' + e.message);
+      toast(t('options.testException', { message: e.message }));
     }
   });
 
@@ -241,16 +274,16 @@ function bind() {
       // 显示加载状态
       els.backupNow.disabled = true;
       const oldText = els.backupNow.textContent;
-      els.backupNow.textContent = '备份中…';
+      els.backupNow.textContent = t('options.backupRunning');
       
-      toast('开始备份');
+      toast(t('options.backupStarted'));
       const res = await chrome.runtime.sendMessage({ type: 'backup:manual' });
       
       if (res?.ok) {
-        toast('备份完成');
+        toast(t('options.backupCompleted'));
         await refreshList(); // 刷新备份列表
       } else {
-        toast('失败: ' + (res?.error || ''));
+        toast(t('options.operationFailed', { message: res?.error || '' }));
       }
       
       // 恢复按钮状态
@@ -258,8 +291,8 @@ function bind() {
       els.backupNow.disabled = false;
     } catch (e) {
       els.backupNow.disabled = false;
-      els.backupNow.textContent = '立即备份';
-      toast('失败: ' + String(e?.message || e));
+      els.backupNow.textContent = t('options.backupNow');
+      toast(t('options.operationFailed', { message: String(e?.message || e) }));
     }
   });
 
@@ -272,33 +305,31 @@ function bind() {
       // 显示加载状态
       els.checkCloud.disabled = true;
       const oldText = els.checkCloud.textContent;
-      els.checkCloud.textContent = '检查中…';
+      els.checkCloud.textContent = t('options.checkingCloud');
       
       // 请求后台检查云端数据
       const res = await chrome.runtime.sendMessage({ type: 'cloud:manual-check' });
       if (!res?.ok) {
-        throw new Error(res?.error || '检查失败');
+        throw new Error(res?.error || t('options.checkFailed'));
       }
       
       if (!res.result) {
-        toast('未配置WebDAV或备份未启用');
+        toast(t('options.webdavOrBackupDisabled'));
         return;
       }
       
       if (!res.result.hasNewerData) {
-        toast('云端没有更新的数据');
+        toast(t('options.noCloudUpdates'));
         return;
       }
       
       // 发现更新数据，询问用户是否同步
       const { cloudFile, cloudTime, localTime } = res.result;
-      const shouldSync = confirm(
-        `发现云端更新数据：\n\n` +
-        `云端文件：${cloudFile.name}\n` +
-        `云端时间：${cloudTime}\n` +
-        `本地时间：${localTime}\n\n` +
-        `是否立即同步？（同步前会自动备份当前本地数据）`
-      );
+      const shouldSync = confirm(t('options.syncConfirm', {
+        fileName: cloudFile.name,
+        cloudTime,
+        localTime
+      }));
       
       if (shouldSync) {
         // 执行同步
@@ -308,17 +339,17 @@ function bind() {
         });
         
         if (syncRes?.ok) {
-          toast('同步成功！');
+          toast(t('options.syncSuccess'));
           await refreshList(); // 刷新备份列表
         } else {
-          throw new Error(syncRes?.error || '同步失败');
+          throw new Error(syncRes?.error || t('home.syncFailedFallback'));
         }
       }
     } catch (e) {
-      toast('操作失败: ' + String(e?.message || e));
+      toast(t('options.actionFailed', { message: String(e?.message || e) }));
     } finally {
       els.checkCloud.disabled = false;
-      els.checkCloud.textContent = '检查云端更新';
+      els.checkCloud.textContent = t('options.checkCloudUpdates');
     }
   });
 
@@ -341,7 +372,7 @@ function bind() {
     const { data } = await readAll();
     data.backgroundImage = els.bgUrl.value.trim();
     await writeData(data);
-    toast('背景地址已保存');
+    toast(t('options.backgroundSaved'));
   });
 }
 
@@ -352,7 +383,7 @@ function bind() {
 async function refreshList() {
   try {
     // 显示加载状态
-    els.list.innerHTML = '加载中...';
+    els.list.innerHTML = t('common.loading');
     
     // 请求后台获取备份列表
     const res = await chrome.runtime.sendMessage({ type: 'backup:list' });
@@ -364,7 +395,7 @@ async function refreshList() {
     // 处理空列表情况
     if (items.length === 0) {
       const empty = document.createElement('li');
-      empty.textContent = '暂无备份';
+      empty.textContent = t('options.noBackups');
       empty.style.opacity = '.65';
       els.list.appendChild(empty);
       return;
@@ -383,26 +414,26 @@ async function refreshList() {
 
       const dateSpan = document.createElement('span');
       dateSpan.className = 'backup-date';
-      dateSpan.textContent = new Date(item.lastmod).toLocaleString();
+      dateSpan.textContent = formatDateTime(item.lastmod);
 
       const btn = document.createElement('button');
       btn.className = 'mini-btn restore-btn';
-      btn.textContent = '恢复';
+      btn.textContent = t('common.restore');
       
       /**
        * 恢复按钮点击事件
        * 从指定备份文件恢复数据
        */
       btn.addEventListener('click', async () => {
-        if (!confirm('确认从该快照恢复？')) return;
+        if (!confirm(t('options.restoreConfirm'))) return;
         const r = await chrome.runtime.sendMessage({ 
           type: 'backup:restore', 
           name: item.name 
         });
         if (r?.ok) {
-          alert('已恢复');
+          alert(t('options.restored'));
         } else {
-          alert('恢复失败: ' + (r?.error || ''));
+          alert(t('options.restoreFailed', { message: r?.error || '' }));
         }
       });
 
@@ -415,7 +446,7 @@ async function refreshList() {
       els.list.appendChild(li);
     });
   } catch (e) {
-    els.list.innerHTML = '加载失败: ' + String(e?.message || e);
+    els.list.innerHTML = t('options.loadFailed', { message: String(e?.message || e) });
   }
 }
 
@@ -485,7 +516,7 @@ async function showImportOptionsDialog() {
 
     // 标题
     const title = document.createElement('h3');
-    title.textContent = '书签导入选项';
+    title.textContent = t('options.importOptions');
     title.style.margin = '0 0 20px 0';
     title.style.fontSize = '18px';
     title.style.fontWeight = '600';
@@ -517,12 +548,12 @@ async function showImportOptionsDialog() {
     enhancedLabel.innerHTML = `
       <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
         <span style="font-size: 20px;">🚀</span>
-        <strong style="font-size: 15px; color: var(--text);">增强导入（推荐）</strong>
+        <strong style="font-size: 15px; color: var(--text);">${t('options.enhancedImportRecommended')}</strong>
       </div>
       <div style="font-size: 15px; color: var(--text-dim); line-height: 1.5;">
-        • 自动获取网站真实标题和图标<br>
-        • 并发处理，效率更高<br>
-        • 网络异常时自动降级
+        • ${t('options.enhancedImportLine1')}<br>
+        • ${t('options.enhancedImportLine2')}<br>
+        • ${t('options.enhancedImportLine3')}
       </div>
     `;
 
@@ -553,11 +584,11 @@ async function showImportOptionsDialog() {
     quickLabel.innerHTML = `
       <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
         <span style="font-size: 20px;">⚡</span>
-        <strong style="font-size: 15px; color: var(--text);">快速导入</strong>
+        <strong style="font-size: 15px; color: var(--text);">${t('options.quickImport')}</strong>
       </div>
       <div style="font-size: 15px; color: var(--text-dim); line-height: 1.5;">
-        • 仅导入文件夹和书签<br>
-        • 速度很快<br>
+        • ${t('options.quickImportLine1')}<br>
+        • ${t('options.quickImportLine2')}<br>
       </div>
     `;
 
@@ -566,20 +597,18 @@ async function showImportOptionsDialog() {
 
     // 按钮容器
     const buttonContainer = document.createElement('div');
-    buttonContainer.style.display = 'flex';
-    buttonContainer.style.justifyContent = 'flex-end';
-    buttonContainer.style.gap = '12px';
+    buttonContainer.className = 'dialog-actions';
 
     // 取消按钮
     const cancelBtn = document.createElement('button');
     cancelBtn.className = 'ghost-btn';
-    cancelBtn.textContent = '取消';
+    cancelBtn.textContent = t('common.cancel');
     cancelBtn.style.minWidth = '80px';
 
     // 确认按钮
     const confirmBtn = document.createElement('button');
     confirmBtn.className = 'primary-btn';
-    confirmBtn.textContent = '开始导入';
+    confirmBtn.textContent = t('options.startImport');
     confirmBtn.style.minWidth = '100px';
 
     buttonContainer.appendChild(cancelBtn);
@@ -673,7 +702,7 @@ function showImportResultDialog(stats, importResult = null) {
 
   // 标题
   const title = document.createElement('h3');
-  title.textContent = '书签导入完成';
+  title.textContent = t('options.importCompleted');
   title.style.cssText = `
     margin: 0;
     font-size: 20px;
@@ -705,17 +734,17 @@ function showImportResultDialog(stats, importResult = null) {
   basicStats.innerHTML = `
     <div style="text-align: center;">
       <div style="font-size: 24px; font-weight: 700; color: var(--primary);">${foldersCount}</div>
-      <div style="font-size: 13px; color: var(--text-dim);">文件夹</div>
+      <div style="font-size: 13px; color: var(--text-dim);">${t('options.folders')}</div>
     </div>
     <div style="text-align: center;">
       <div style="font-size: 24px; font-weight: 700; color: var(--accent);">${bookmarksCount}</div>
-      <div style="font-size: 13px; color: var(--text-dim);">书签</div>
+      <div style="font-size: 13px; color: var(--text-dim);">${t('options.bookmarks')}</div>
     </div>
   `;
 
   // 添加"导入结果"标题
   const importResultTitle = document.createElement('div');
-  importResultTitle.textContent = '导入结果';
+  importResultTitle.textContent = t('options.importResult');
   importResultTitle.style.cssText = `
     font-size: 15px;
     font-weight: 600;
@@ -737,10 +766,10 @@ function showImportResultDialog(stats, importResult = null) {
       `;
 
       enhancedStats.innerHTML = `
-        <div style="font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 10px;">增强结果</div>
+        <div style="font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 10px;">${t('options.enhancedResult')}</div>
         <div style="display: flex; justify-content: space-around;">
-          <div style="color: #10b981;">${successful} 成功</div>
-          <div style="color: #ef4444;">${failed} 失败</div>
+          <div style="color: #10b981;">${successful} ${t('common.success')}</div>
+          <div style="color: #ef4444;">${failed} ${t('common.failed')}</div>
           <div>${Math.round((successful / processed) * 100)}%</div>
         </div>
       `;
@@ -758,7 +787,7 @@ function showImportResultDialog(stats, importResult = null) {
   // 关闭按钮
   const closeBtn = document.createElement('button');
   closeBtn.className = 'primary-btn';
-  closeBtn.textContent = '完成';
+  closeBtn.textContent = t('options.completed');
   closeBtn.style.cssText = `
     background: var(--primary);
     border: none;
@@ -821,19 +850,19 @@ async function handleImportBookmarks() {
     
     if (!isExtensionMode) {
       // Web模式下不支持书签导入
-      alert('书签导入功能仅在 Chrome 扩展模式下可用。\n\n如需使用此功能，请：\n1. 安装 MyTab Chrome 扩展\n2. 在扩展中打开设置页面\n3. 使用导入功能');
+      alert(t('options.extensionModeOnly'));
       return;
     }
 
     // 检查Chrome扩展环境
     if (!window.chrome) {
-      toast('✗ Chrome 扩展环境不可用，请确保在扩展中使用此功能', 3000);
+      toast(t('options.extensionUnavailable'), 3000);
       return;
     }
 
     // 检查书签API是否可用
     if (!chrome.bookmarks) {
-      toast('✗ 书签 API 不可用，请重新加载扩展或检查权限设置', 3000);
+      toast(t('options.bookmarksApiUnavailable'), 3000);
       console.error('书签API不可用，请检查manifest.json中的权限配置');
       return;
     }
@@ -848,9 +877,9 @@ async function handleImportBookmarks() {
     // 显示加载状态
     els.importBookmarks.disabled = true;
     const oldText = els.importBookmarks.textContent;
-    els.importBookmarks.textContent = '导入中...';
+    els.importBookmarks.textContent = t('options.importing');
     
-    toast('正在读取书签数据...');
+    toast(t('options.readingBookmarks'));
 
     // 读取浏览器书签
     const bookmarkTree = await chrome.bookmarks.getTree();
@@ -863,7 +892,7 @@ async function handleImportBookmarks() {
       els.importBookmarks.disabled = false;
       els.importBookmarks.textContent = oldText;
       
-      toast('没有找到可导入的书签，请检查浏览器是否有书签数据', 3000);
+      toast(t('options.noBookmarksFound'), 3000);
       return;
     }
 
@@ -889,7 +918,7 @@ async function handleImportBookmarks() {
       
       // 显示错误提示
       const errorMsg = importError.message || importError;
-      toast('✗ 导入过程中发生错误: ' + errorMsg + '\n请检查网络连接或稍后重试', 4000);
+      toast(t('options.importProcessError', { message: errorMsg }), 4000);
     }
     
   } catch (error) {
@@ -897,11 +926,11 @@ async function handleImportBookmarks() {
     
     // 恢复按钮状态
     els.importBookmarks.disabled = false;
-    els.importBookmarks.textContent = '导入浏览器书签';
+    els.importBookmarks.textContent = t('options.importBrowserBookmarks');
     
     // 显示错误提示
     const errorMsg = error.message || error;
-    toast('✗ 书签导入失败: ' + errorMsg + '\n请检查扩展权限和网络连接', 4000);
+    toast(t('options.importFailed', { message: errorMsg }), 4000);
   }
 }
 
@@ -937,16 +966,16 @@ async function removeWebdavPermissions(url) {
     
     if (removed) {
       console.log('WebDAV权限已清除:', hostname);
-      toast('✓ 权限已清除，可以重新测试');
+      toast(t('options.permissionsCleared'));
     } else {
       console.log('权限清除失败或权限不存在:', hostname);
-      toast('权限清除失败或权限不存在');
+      toast(t('options.clearPermissionsFailed'));
     }
     
     return removed;
   } catch (error) {
     console.error('清除权限失败:', error);
-    toast('清除权限失败: ' + error.message);
+    toast(t('options.clearPermissionsError', { message: error.message }));
     return false;
   }
 }
@@ -1006,49 +1035,23 @@ async function requestWebdavPermissions(url) {
     } catch (requestError) {
       console.error('权限申请异常:', requestError);
       // 如果权限申请抛出异常，可能是因为用户手势上下文丢失
-      alert(
-        `权限申请失败\n\n` +
-        `无法申请访问 ${hostname} 的权限。\n\n` +
-        `可能的原因：\n` +
-        `• 浏览器阻止了权限申请\n` +
-        `• 权限申请超时\n\n` +
-        `解决方法：\n` +
-        `• 请重新点击保存按钮\n` +
-        `• 检查浏览器是否阻止了弹窗\n` +
-        `• 在扩展管理页面手动添加网站权限`
-      );
+      alert(t('options.permissionRequestFailed', { hostname }));
       return false;
     }
     
     if (granted) {
       console.log('WebDAV权限申请成功:', hostname);
-      toast('✓ 权限申请成功，可以正常使用WebDAV功能');
+      toast(t('options.permissionRequestGranted'));
     } else {
       console.log('WebDAV权限申请被拒绝:', hostname);
       // 提供更详细的失败说明
-      alert(
-        `权限申请被拒绝\n\n` +
-        `您拒绝了访问 ${hostname} 的权限申请。\n\n` +
-        `如需使用WebDAV功能，请：\n` +
-        `• 重新点击保存按钮并在弹窗中选择"允许"\n` +
-        `• 或在扩展管理页面手动添加网站权限\n\n` +
-        `权限用途：\n` +
-        `• 测试服务器连接状态\n` +
-        `• 上传和下载备份数据`
-      );
+      alert(t('options.permissionRequestDenied', { hostname }));
     }
     
     return granted;
   } catch (error) {
     console.error('WebDAV权限请求失败:', error);
-    alert(
-      `权限申请出现异常\n\n` +
-      `错误信息：${error.message || error}\n\n` +
-      `请尝试：\n` +
-      `• 重新加载扩展\n` +
-      `• 重启浏览器\n` +
-      `• 检查扩展是否正常安装`
-    );
+    alert(t('options.permissionRequestException', { message: error.message || error }));
     return false;
   }
 }
@@ -1242,7 +1245,7 @@ async function convertBookmarksToMyTab(bookmarkTree, options = { enhanced: true 
           await applyOriginalBookmarksToFolder(folder);
         }
         
-        progressDialog.setError(enhancementResult.error || '增强过程失败');
+        progressDialog.setError(enhancementResult.error || t('import.enhancementProcessFailed'));
       }
 
       // 延迟关闭进度对话框，让用户看到结果
@@ -1270,11 +1273,11 @@ async function convertBookmarksToMyTab(bookmarkTree, options = { enhanced: true 
       
       // 根据错误类型提供更友好的错误信息
       if (errorMessage.includes('网络错误') || errorMessage.includes('Failed to fetch')) {
-        errorMessage = '网络连接失败，请检查网络连接后重试';
+        errorMessage = t('import.networkRetryMessage');
       } else if (errorMessage.includes('超时')) {
-        errorMessage = '请求超时，可能是网络较慢或目标网站响应缓慢';
+        errorMessage = t('import.timeoutRetryMessage');
       } else if (errorMessage.includes('权限')) {
-        errorMessage = '权限不足，请确保已授予必要的浏览器权限';
+        errorMessage = t('import.permissionRetryMessage');
       }
       
       progressDialog.setError(errorMessage);
@@ -1334,7 +1337,7 @@ async function processBookmarkFolder(folderNode, parentId, generateId) {
       // 是书签
       bookmarks.push({
         id: generateId('b'),
-        title: child.title || '无标题书签',
+        title: child.title || t('import.defaultUntitledBookmark'),
         url: child.url,
         dateAdded: child.dateAdded || Date.now(),
         parentFolderId: parentId
@@ -1343,7 +1346,7 @@ async function processBookmarkFolder(folderNode, parentId, generateId) {
       // 是子文件夹
       const subFolder = {
         id: generateId('f'),
-        name: child.title || '无名文件夹',
+        name: child.title || t('import.defaultUnnamedFolder'),
         icon: '📁',
         type: 'folder',
         parentId: parentId,
@@ -1383,7 +1386,7 @@ async function processBookmarkNode(node, parentId, generateId) {
     // 是书签
     const bookmark = {
       id: generateId('b'),
-      title: node.title || '无标题书签',
+      title: node.title || t('import.defaultUntitledBookmark'),
       url: node.url,
       dateAdded: node.dateAdded || Date.now(),
       parentFolderId: parentId
@@ -1393,7 +1396,7 @@ async function processBookmarkNode(node, parentId, generateId) {
     // 是文件夹
     const folder = {
       id: generateId('f'),
-      name: node.title || '无名文件夹',
+      name: node.title || t('import.defaultUnnamedFolder'),
       icon: '📁',
       type: 'folder',
       parentId: parentId,
@@ -1440,7 +1443,7 @@ async function applyEnhancedBookmarksToFolder(folder, enhancedBookmarkMap) {
       if (enhanced) {
         console.log(`找到增强数据: ${originalBookmark.url} -> ${enhanced.title}`);
         // 使用增强后的数据，但保留原始的ID和文件夹关联
-        const finalTitle = enhanced.title || enhanced.originalTitle || originalBookmark.title || '无标题书签';
+        const finalTitle = enhanced.title || enhanced.originalTitle || originalBookmark.title || t('import.defaultUntitledBookmark');
         return {
           ...enhanced,
           id: originalBookmark.id,

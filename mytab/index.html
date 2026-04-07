@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MyTab</title>
+  <title data-i18n="pageTitle.home">MyTab</title>
   <link rel="stylesheet" href="styles.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -21,7 +21,7 @@
     <aside class="sidebar glass">
       <div class="sidebar-header">
         <div class="brand">MyTab</div>
-        <button id="btn-settings" title="设置" class="icon-btn">⚙️</button>
+        <button id="btn-settings" data-i18n-title="home.settingsTitle" title="设置" class="icon-btn">⚙️</button>
       </div>
       <div id="folder-list" class="folder-list"></div>
       <button id="btn-add-folder" class="primary-btn">＋</button>
@@ -39,8 +39,8 @@
 
       <div class="tools-floating">
         <div class="search-container">
-          <input id="search" class="search" placeholder="搜索书签名称、网址或备注..." />
-          <button id="search-clear" class="search-clear-btn" title="清空搜索">✕</button>
+          <input id="search" class="search" data-i18n-placeholder="home.searchPlaceholder" placeholder="搜索书签名称、网址或备注..." />
+          <button id="search-clear" class="search-clear-btn" data-i18n-title="home.clearSearch" title="清空搜索">✕</button>
         </div>
       </div>
 
@@ -64,8 +64,8 @@
         <div class="name"></div>
       </div>
       <div class="right">
-        <button class="mini-btn rename">重命名</button>
-        <button class="mini-btn delete">删除</button>
+          <button class="mini-btn rename" data-i18n="common.rename">重命名</button>
+          <button class="mini-btn delete" data-i18n="common.delete">删除</button>
       </div>
     </div>
   </template>
@@ -85,16 +85,16 @@
   <div id="bookmark-modal" class="modal hidden">
     <div class="panel glass">
       <div class="inner">
-        <div style="display:flex; align-items:center; justify-content: space-between;">
-          <h3 id="modal-title" style="margin: 6px 0 12px 0;">添加书签</h3>
+        <div class="dialog-header">
+          <h3 id="modal-title" style="margin: 6px 0 12px 0;" data-i18n="home.addBookmark">添加书签</h3>
           <button id="modal-close" class="icon-btn">✕</button>
         </div>
         <div class="row">
           <div class="field">
-            <div class="label">网址</div>
+            <div class="label" data-i18n="home.url">网址</div>
             <div class="url-input-group">
               <input id="bm-url" class="search" placeholder="https://example.com" autocomplete="off"/>
-              <button id="btn-ai-analyze" class="icon-btn ai-analyze-btn" type="button" title="AI分析网址">
+              <button id="btn-ai-analyze" class="icon-btn ai-analyze-btn" type="button" data-i18n-title="home.aiAnalyzeTitle" title="AI分析网址">
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
                   <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
                 </svg>
@@ -102,26 +102,26 @@
             </div>
           </div>
           <div class="field">
-            <div class="label">名称（可选）</div>
-            <input id="bm-name" class="search" placeholder="显示名称" autocomplete="off" />
+            <div class="label" data-i18n="home.nameOptional">名称（可选）</div>
+            <input id="bm-name" class="search" data-i18n-placeholder="home.displayName" placeholder="显示名称" autocomplete="off" />
           </div>
         </div>
         <div class="row">
           <div class="field" style="grid-column: 1 / -1;">
-            <div class="label">备注（可选）</div>
-            <input id="bm-remark" class="search" placeholder="添加一条备注，悬浮书签时会显示" autocomplete="off"/>
+            <div class="label" data-i18n="home.remarkOptional">备注（可选）</div>
+            <input id="bm-remark" class="search" data-i18n-placeholder="home.remarkPlaceholder" placeholder="添加一条备注，悬浮书签时会显示" autocomplete="off"/>
           </div>
         </div>
         <div class="row">
           <div class="field">
-            <div class="label">图标模式</div>
+            <div class="label" data-i18n="home.iconMode">图标模式</div>
             <div>
               <label style="margin-right:12px;"><input type="radio" name="icon-mode" value="favicon" checked /> Favicon</label>
-              <label><input type="radio" name="icon-mode" value="mono" /> 单色图标</label>
+              <label><input type="radio" name="icon-mode" value="mono" /> <span data-i18n="home.monoIcon">单色图标</span></label>
             </div>
           </div>
           <div class="field">
-            <div class="label">预览</div>
+            <div class="label" data-i18n="home.preview">预览</div>
             <div style="display:flex; align-items:center; gap:12px;">
               <div class="cover">
                 <img id="preview-fav" class="favicon" alt="" />
@@ -132,38 +132,38 @@
         </div>
         <div class="row" id="row-favicon">
           <div class="field">
-            <div class="label">Favicon 地址（可留空自动）</div>
+            <div class="label" data-i18n="home.faviconUrlOptional">Favicon 地址（可留空自动）</div>
             <input id="bm-favicon" class="search" placeholder="https://example.com/favicon.ico" autocomplete="off"/>
           </div>
           <div class="field">
-            <div class="label">自动获取</div>
+            <div class="label" data-i18n="home.autoFetch">自动获取</div>
             <div style="display:flex; gap:10px; align-items:center;">
               <div id="fetch-status" class="fetch-status hidden">
                 <div class="loading-dot"></div>
-                <span>正在获取图标和标题...</span>
+                <span data-i18n="home.fetchingIconAndTitle">正在获取图标和标题...</span>
               </div>
             </div>
           </div>
         </div>
         <div class="row hidden" id="row-fav-candidates" style="grid-template-columns:1fr;">
           <div class="field" style="grid-column: 1 / -1;">
-            <div class="label">可选图标（点击选择）</div>
+            <div class="label" data-i18n="home.optionalIcons">可选图标（点击选择）</div>
             <div id="bm-fav-candidates" class="fav-candidates"></div>
           </div>
         </div>
         <div class="row hidden" id="row-mono">
           <div class="field">
-            <div class="label">字母</div>
+            <div class="label" data-i18n="home.letter">字母</div>
             <input id="bm-letter" class="search" placeholder="A" maxlength="1" autocomplete="off"/>
           </div>
           <div class="field">
-            <div class="label">背景色</div>
+            <div class="label" data-i18n="home.backgroundColor">背景色</div>
             <input id="bm-color" class="search" type="color" value="#7c5cff" />
           </div>
         </div>
-        <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:12px;">
-          <button id="modal-cancel" class="ghost-btn">取消</button>
-          <button id="modal-save" class="primary-btn">保存</button>
+        <div class="dialog-actions" style="margin-top:12px;">
+          <button id="modal-cancel" class="ghost-btn" data-i18n="common.cancel">取消</button>
+          <button id="modal-save" class="primary-btn" data-i18n="common.save">保存</button>
         </div>
       </div>
     </div>
@@ -173,15 +173,15 @@
   <div id="text-modal" class="modal hidden">
     <div class="panel glass">
       <div class="inner">
-        <div style="display:flex; align-items:center; justify-content: space-between;">
-          <h3 id="tm-title" style="margin: 6px 0 12px 0;">输入</h3>
+        <div class="dialog-header">
+          <h3 id="tm-title" style="margin: 6px 0 12px 0;" data-i18n="home.inputTitle">输入</h3>
           <button id="tm-close" class="icon-btn">✕</button>
         </div>
         <div id="tm-message" class="tm-message hidden"></div>
-        <input id="tm-input" class="search" placeholder="请输入" autocomplete="off"/>
-        <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:12px;">
-          <button id="tm-cancel" class="ghost-btn">取消</button>
-          <button id="tm-save" class="primary-btn">确定</button>
+        <input id="tm-input" class="search" data-i18n-placeholder="home.inputPlaceholder" placeholder="请输入" autocomplete="off"/>
+        <div class="dialog-actions" style="margin-top:12px;">
+          <button id="tm-cancel" class="ghost-btn" data-i18n="common.cancel">取消</button>
+          <button id="tm-save" class="primary-btn" data-i18n="common.confirm">确定</button>
         </div>
       </div>
     </div>
@@ -196,8 +196,8 @@
   <div id="search-modal" class="modal hidden">
     <div class="panel glass">
       <div class="inner">
-        <div style="display:flex; align-items:center; justify-content: space-between;">
-          <h3 id="search-title" style="margin: 6px 0 12px 0;">搜索结果</h3>
+        <div class="dialog-header">
+          <h3 id="search-title" style="margin: 6px 0 12px 0;" data-i18n="home.searchResults">搜索结果</h3>
           <button id="search-close" class="icon-btn">✕</button>
         </div>
         <div id="search-list" class="search-list"></div>
@@ -209,18 +209,18 @@
   <div id="choice-modal" class="modal hidden">
     <div class="panel glass" style="width: 420px;">
       <div class="inner">
-        <div style="display:flex; align-items:center; justify-content: space-between;">
-          <h3 style="margin: 6px 0 12px 0;">选择要添加的类型</h3>
+        <div class="dialog-header">
+          <h3 style="margin: 6px 0 12px 0;" data-i18n="home.chooseAddType">选择要添加的类型</h3>
           <button id="cm-close" class="icon-btn">✕</button>
         </div>
         <div class="choice-buttons">
           <button id="cm-btn-bookmark" class="choice-btn">
             <span class="icon">🔖</span>
-            <span class="text">书签</span>
+            <span class="text" data-i18n="common.bookmark">书签</span>
           </button>
           <button id="cm-btn-folder" class="choice-btn">
             <span class="icon">📁</span>
-            <span class="text">文件夹</span>
+            <span class="text" data-i18n="common.folder">文件夹</span>
           </button>
         </div>
       </div>
@@ -231,8 +231,8 @@
   <div id="move-modal" class="modal hidden">
     <div class="panel glass" style="width: 400px; max-height: 78vh;">
       <div class="inner" style="padding: 12px;">
-        <div style="display:flex; align-items:center; justify-content: space-between; margin-bottom: 8px;">
-          <h3 id="move-title" style="margin: 0; font-size: 15px;">移动到</h3>
+        <div class="dialog-header" style="margin-bottom: 8px;">
+          <h3 id="move-title" style="margin: 0; font-size: 15px;" data-i18n="home.moveTo">移动到</h3>
           <button id="move-close" class="icon-btn">✕</button>
         </div>
         
@@ -240,8 +240,8 @@
         <div id="move-root-option" class="move-folder-option" data-folder-id="root" style="margin-bottom: 4px;">
           <div class="move-folder-icon">🏠</div>
           <div class="move-folder-info">
-            <div class="move-folder-name">根目录</div>
-            <div class="move-folder-path">一级文件夹</div>
+            <div class="move-folder-name" data-i18n="home.rootFolder">根目录</div>
+            <div class="move-folder-path" data-i18n="home.topLevelFolder">一级文件夹</div>
           </div>
         </div>
         
@@ -250,9 +250,9 @@
           <!-- 动态生成的文件夹树 -->
         </div>
         
-        <div style="display:flex; justify-content:flex-end; gap:8px;">
-          <button id="move-cancel" class="ghost-btn" style="padding: 5px 10px; font-size: 13px;">取消</button>
-          <button id="move-confirm" class="primary-btn" style="padding: 5px 10px; font-size: 13px;" disabled>移动</button>
+        <div class="dialog-actions" style="gap:8px;">
+          <button id="move-cancel" class="ghost-btn" style="padding: 5px 10px; font-size: 13px;" data-i18n="common.cancel">取消</button>
+          <button id="move-confirm" class="primary-btn" style="padding: 5px 10px; font-size: 13px;" disabled data-i18n="common.move">移动</button>
         </div>
       </div>
     </div>
@@ -270,8 +270,8 @@
       <h3 class="guide-tooltip-title" id="guide-title"></h3>
       <p class="guide-tooltip-content" id="guide-content"></p>
       <div class="guide-tooltip-actions">
-        <button class="guide-btn guide-btn-skip" id="guide-skip">跳过引导</button>
-        <button class="guide-btn guide-btn-next" id="guide-next">下一步</button>
+          <button class="guide-btn guide-btn-skip" id="guide-skip" data-i18n="home.skipGuide">跳过引导</button>
+          <button class="guide-btn guide-btn-next" id="guide-next" data-i18n="home.nextStep">下一步</button>
       </div>
     </div>
     <!-- 步骤指示器 -->
@@ -280,7 +280,7 @@
 
   <!-- 数据版本显示 -->
   <div id="data-version" class="data-version">
-    <span id="version-text">数据版本: --</span>
+      <span id="version-text" data-i18n="home.dataVersionUnknown">数据版本: --</span>
   </div>
 
   <script src="scripts/web-shim.js"></script>

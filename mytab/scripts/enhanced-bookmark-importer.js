@@ -6,6 +6,7 @@
 
 import { Semaphore, ProgressTracker } from './enhancement-utils.js';
 import { generateId, setIconDataUrl } from './storage.js';
+import { t } from './i18n.js';
 
 /**
  * 增强书签导入器类
@@ -109,7 +110,7 @@ export class EnhancedBookmarkImporter {
         // 更新进度显示网络状态
         this.progressTracker.updateImmediate({
           ...this.stats,
-          currentUrl: '网络不可用，跳过增强功能',
+          currentUrl: t('import.networkUnavailableSkip'),
           phase: 'network_unavailable'
         });
         
@@ -118,7 +119,7 @@ export class EnhancedBookmarkImporter {
           ...bookmark,
           originalTitle: bookmark.title,
           enhanced: false,
-          enhancementError: '网络不可用',
+          enhancementError: t('import.networkUnavailableSkip'),
           enhancedAt: Date.now(),
           iconType: 'mono',
           mono: {
@@ -130,7 +131,7 @@ export class EnhancedBookmarkImporter {
         // 更新统计信息
         this.stats.processed = bookmarkList.length;
         this.stats.failed = bookmarkList.length;
-        this._recordError('network', '网络连接不可用，跳过所有增强功能', 'network');
+        this._recordError('network', t('import.networkUnavailableAll'), 'network');
         
         return {
           success: true,
@@ -222,7 +223,7 @@ export class EnhancedBookmarkImporter {
         // 更新进度显示网络状态
         this.progressTracker.updateImmediate({
           ...this.stats,
-          currentUrl: '网络不可用，跳过增强功能',
+          currentUrl: t('import.networkUnavailableSkip'),
           phase: 'network_unavailable'
         });
         
@@ -231,7 +232,7 @@ export class EnhancedBookmarkImporter {
           ...bookmark,
           originalTitle: bookmark.title,
           enhanced: false,
-          enhancementError: '网络不可用',
+          enhancementError: t('import.networkUnavailableSkip'),
           enhancedAt: Date.now(),
           iconType: 'mono',
           mono: {
@@ -243,7 +244,7 @@ export class EnhancedBookmarkImporter {
         // 更新统计信息
         this.stats.processed = bookmarks.length;
         this.stats.failed = bookmarks.length;
-        this._recordError('network', '网络连接不可用，跳过所有增强功能', 'network');
+        this._recordError('network', t('import.networkUnavailableAll'), 'network');
         
         return {
           success: true,
@@ -326,7 +327,7 @@ export class EnhancedBookmarkImporter {
     const enhancedBookmark = {
       id: bookmark.id || generateId('b'),
       url: bookmark.url || '',
-      name: bookmark.title || '无标题书签', // 使用name字段而不是title
+      name: bookmark.title || t('import.defaultUntitledBookmark'), // 使用name字段而不是title
       iconType: 'favicon',
       iconUrl: '',
       mono: null,
@@ -353,18 +354,18 @@ export class EnhancedBookmarkImporter {
           titleSuccess = true;
           console.log(`✅ [书签增强] 标题更新成功: "${bookmark.title}" -> "${enhancedBookmark.name}":`, bookmark.url);
         } else {
-          enhancedBookmark.name = this._cleanBookmarkTitle(bookmark.title) || '无标题书签';
+          enhancedBookmark.name = this._cleanBookmarkTitle(bookmark.title) || t('import.defaultUntitledBookmark');
           console.log(`⚠️ [书签增强] 书签API返回空标题，保持原始标题: "${enhancedBookmark.name}":`, bookmark.url);
         }
       } else {
-        enhancedBookmark.name = this._cleanBookmarkTitle(bookmark.title) || '无标题书签';
+        enhancedBookmark.name = this._cleanBookmarkTitle(bookmark.title) || t('import.defaultUntitledBookmark');
         console.log(`⚠️ [书签增强] 无书签ID或API不可用，保持原始标题: "${enhancedBookmark.name}":`, bookmark.url);
       }
     } catch (error) {
       const errorMsg = error.message || String(error);
       console.warn(`❌ [书签增强] 标题获取异常: ${errorMsg}:`, bookmark.url, error);
       this._recordError(bookmark.url, error, 'title');
-      enhancedBookmark.name = this._cleanBookmarkTitle(bookmark.title) || '无标题书签';
+      enhancedBookmark.name = this._cleanBookmarkTitle(bookmark.title) || t('import.defaultUntitledBookmark');
       console.log(`🔄 [书签增强] 使用原始标题作为备选: "${enhancedBookmark.name}":`, bookmark.url);
     }
 
@@ -435,7 +436,7 @@ export class EnhancedBookmarkImporter {
     // 更新进度显示
     this.progressTracker.updateImmediate({
       ...this.stats,
-      currentUrl: '操作已取消',
+        currentUrl: t('import.operationCancelled'),
       phase: 'cancelled'
     });
   }
@@ -606,7 +607,7 @@ export class EnhancedBookmarkImporter {
           // 是书签
           bookmarks.push({
             id: node.id,
-            title: node.title || '无标题书签',
+            title: node.title || t('import.defaultUntitledBookmark'),
             url: node.url,
             dateAdded: node.dateAdded || Date.now()
           });
@@ -740,7 +741,7 @@ export class EnhancedBookmarkImporter {
     if (isExtensionMode && window.chrome && chrome.runtime) {
       // 扩展模式：使用后台服务
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('图标获取超时')), this.timeout);
+        setTimeout(() => reject(new Error(t('webdav.requestTimeout', { ms: this.timeout }))), this.timeout);
       });
 
       const iconPromise = chrome.runtime.sendMessage({ type: 'favicon:fetch', pageUrl: url });

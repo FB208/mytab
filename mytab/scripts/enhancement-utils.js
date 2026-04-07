@@ -1,3 +1,5 @@
+import { formatDuration } from './i18n.js';
+
 /**
  * 增强书签导入功能的核心工具类
  * 包含并发控制、进度跟踪和缓存功能
@@ -297,21 +299,7 @@ export class ProgressTracker {
    * @private
    */
   _formatDuration(seconds) {
-    if (seconds <= 0) {
-      return '0秒';
-    }
-    
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
-    
-    if (hours > 0) {
-      return `${hours}小时${minutes}分钟`;
-    } else if (minutes > 0) {
-      return `${minutes}分${secs}秒`;
-    } else {
-      return `${secs}秒`;
-    }
+    return formatDuration(seconds);
   }
 
   /**

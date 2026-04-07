@@ -1,0 +1,11 @@
+{
+  "extension_name": {
+    "message": "MyTab - WebDAV 同步书签面板"
+  },
+  "extension_description": {
+    "message": "一个简洁、美观、轻量、免费的新标签页面板，支持自定义 WebDAV 备份与历史记录恢复，确保你永远不会丢失自己的收藏。"
+  },
+  "action_title": {
+    "message": "MyTab"
+  }
+}

@@ -1,8 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "MyTab - WebDAV 同步书签面板",
+  "default_locale": "zh_CN",
+  "name": "__MSG_extension_name__",
   "version": "0.5.17",
-  "description": "一个简洁、美观、轻量、免费的新标签页面板，支持自定义 WebDAV 备份与历史记录恢复，确保你永远不会丢失自己的收藏。",
+  "description": "__MSG_extension_description__",
   "chrome_url_overrides": {
     "newtab": "index.html"
   },
@@ -28,7 +29,7 @@
     "open_in_tab": true
   },
   "action": {
-    "default_title": "MyTab",
+    "default_title": "__MSG_action_title__",
     "default_icon": {
       "16": "assets/icon16.png",
       "32": "assets/icon32.png"

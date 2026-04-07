@@ -30,6 +30,12 @@ import {
   deleteSubfolder,
   moveSubfolder
 } from './storage.js';
+import {
+  escapeHtml,
+  formatDateTime,
+  initPageI18n,
+  t
+} from './i18n.js';
 
 let state = {
   selectedFolderId: null, // 当前选中的文件夹ID
@@ -70,6 +76,7 @@ const iconPreloadFailures = new Map();
 let activeIconPreloads = 0;
 
 await ensureInit();
+await initPageI18n();
 await bootstrap();
 // 延迟检查云端数据，避免与初始化冲突
 setTimeout(() => {
@@ -248,7 +255,7 @@ async function preloadIconData(iconUrl) {
 // 检查是否正在同步，如果是则阻止操作
 function checkSyncStatus() {
   if (isSyncing) {
-    toast('⚠️ 正在同步数据，请稍候完成后再操作', 2000);
+    toast(t('home.syncingBlocked'), 2000);
     return false;
   }
   return true;
@@ -304,8 +311,8 @@ function bindEvents() {
     if (!checkSyncStatus()) return;
     
     const name = await textPrompt({
-      title: '新建一级文件夹',
-      placeholder: '文件夹名称'
+      title: t('home.newTopFolder'),
+      placeholder: t('home.folderName')
     });
     if (!name) return;
     const folder = await addFolder(name);
@@ -537,16 +544,15 @@ function updateDataVersion(data) {
   if (!versionElement) return;
   
   if (data?.lastModified) {
-    const date = new Date(data.lastModified);
-    const formatTime = date.toLocaleString('zh-CN', {
+    const formatTime = formatDateTime(data.lastModified, undefined, {
       month: '2-digit',
       day: '2-digit',
       hour: '2-digit',
       minute: '2-digit'
     });
-    versionElement.textContent = `数据版本: ${formatTime}`;
+    versionElement.textContent = t('home.dataVersion', { time: formatTime });
   } else {
-    versionElement.textContent = '数据版本: --';
+    versionElement.textContent = t('home.dataVersionUnknown');
   }
 }
 
@@ -749,10 +755,10 @@ async function renderFolderList() {
     el.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       openContextMenu(e.clientX, e.clientY, [{
-          label: '重命名',
+          label: t('common.rename'),
           onClick: async () => {
             const name = await textPrompt({
-              title: '重命名',
+              title: t('common.rename'),
               placeholder: folder.name,
               value: folder.name
             });
@@ -763,15 +769,15 @@ async function renderFolderList() {
           }
         },
         {
-          label: '移动',
+          label: t('common.move'),
           onClick: async () => {
             await showMoveModal('folder', folder.id, null, folder.name);
           }
         },
         {
-          label: '删除',
+          label: t('common.delete'),
           onClick: async () => {
-            const ok = await confirmPrompt('确认删除该文件夹及其内容？');
+            const ok = await confirmPrompt(t('home.confirmDeleteFolder'));
             if (ok) {
               await deleteFolder(folder.id);
               if (state.selectedFolderId === folder.id) {
@@ -823,7 +829,7 @@ function renderBreadcrumb() {
   // 添加根目录链接
   const homeLink = document.createElement('span');
   homeLink.className = 'breadcrumb-item clickable';
-  homeLink.textContent = '🏠 首页';
+  homeLink.textContent = t('home.rootBreadcrumb');
   homeLink.addEventListener('click', () => {
     state.selectedFolderId = null;
     render();
@@ -928,7 +934,7 @@ async function renderBookmarkGrid() {
   if (currentFolder && currentFolder.parentId) {
     const backEl = tpl.content.firstElementChild.cloneNode(true);
     backEl.dataset.id = 'back';
-    backEl.title = '返回上级';
+    backEl.title = t('home.backToParent');
     const img = backEl.querySelector('.favicon');
     const mono = backEl.querySelector('.mono-icon');
     img.style.display = 'none';
@@ -936,7 +942,7 @@ async function renderBookmarkGrid() {
     mono.style.background = '#d1d5db';
     mono.querySelector('.letter').textContent = '↩';
     const titleEl = backEl.querySelector('.title');
-    if (titleEl) titleEl.textContent = '返回上级';
+    if (titleEl) titleEl.textContent = t('home.backToParent');
     backEl.addEventListener('click', () => {
       // 返回到父文件夹
       const parentFolder = findFolderById(data.folders, currentFolder.parentId);
@@ -1197,10 +1203,10 @@ async function renderBookmarkGrid() {
       el.addEventListener('contextmenu', (e) => {
         e.preventDefault();
         openContextMenu(e.clientX, e.clientY, [{
-            label: '重命名',
+            label: t('common.rename'),
             onClick: async () => {
               const name = await textPrompt({
-                title: '重命名文件夹',
+                title: t('common.rename'),
                 placeholder: subfolder.name,
                 value: subfolder.name
               });
@@ -1211,15 +1217,15 @@ async function renderBookmarkGrid() {
             }
           },
           {
-            label: '移动',
+            label: t('common.move'),
             onClick: async () => {
               await showMoveModal('folder', subfolder.id, null, subfolder.name);
             }
           },
           {
-            label: '删除',
+            label: t('common.delete'),
             onClick: async () => {
-              const ok = await confirmPrompt('确认删除该文件夹及其内容？');
+              const ok = await confirmPrompt(t('home.confirmDeleteFolder'));
               if (ok) {
                 await deleteFolder(subfolder.id);
                 // 如果删除的是当前选中的文件夹，返回到父文件夹
@@ -1341,7 +1347,7 @@ async function renderBookmarkGrid() {
     el.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       openContextMenu(e.clientX, e.clientY, [{
-          label: '编辑',
+          label: t('common.edit'),
           onClick: () => openBookmarkModal({
             mode: 'edit',
             bookmark: {
@@ -1351,15 +1357,15 @@ async function renderBookmarkGrid() {
           })
         },
         {
-          label: '移动',
+          label: t('common.move'),
           onClick: async () => {
             await showMoveModal('bookmark', bm.id, state.selectedFolderId, bm.name || bm.url);
           }
         },
         {
-          label: '删除',
+          label: t('common.delete'),
           onClick: async () => {
-            const ok = await confirmPrompt('删除该书签？');
+            const ok = await confirmPrompt(t('home.confirmDeleteBookmark'));
             if (ok) {
               await deleteBookmark({
                 folderId: state.selectedFolderId,
@@ -1381,13 +1387,13 @@ async function renderBookmarkGrid() {
   if (state.selectedFolderId) {
     const addEl = tpl.content.firstElementChild.cloneNode(true);
     addEl.id = 'btn-add-new-item';
-    addEl.title = '添加书签或文件夹';
+    addEl.title = t('home.chooseAddType');
 
     const title = addEl.querySelector('.title');
     const img = addEl.querySelector('.favicon');
     const mono = addEl.querySelector('.mono-icon');
 
-    if (title) title.textContent = '添加';
+    if (title) title.textContent = t('home.addItemCard');
     if (img) img.style.display = 'none';
 
     if (mono) {
@@ -1409,11 +1415,11 @@ async function renderBookmarkGrid() {
           mode: 'add'
         });
       } else if (choice === 'folder') {
-        if (!state.selectedFolderId) return toast('请先选择一个文件夹');
+        if (!state.selectedFolderId) return toast(t('home.selectFolderFirst'));
         
         const name = await textPrompt({
-          title: '新建子文件夹',
-          placeholder: '文件夹名称'
+          title: t('home.newSubfolder'),
+          placeholder: t('home.folderName')
         });
         if (name) {
           // 在当前选中的文件夹下创建子文件夹
@@ -1487,7 +1493,7 @@ function toast(text, duration = 1600) {
 
 // 文本输入弹窗
 async function textPrompt({
-  title = '输入',
+  title = t('home.inputTitle'),
   message = '',
   placeholder = '',
   value = ''
@@ -1543,7 +1549,7 @@ async function confirmPrompt(message) {
   const btnCancel = document.getElementById('tm-cancel');
   const btnSave = document.getElementById('tm-save');
   return new Promise((resolve) => {
-    titleEl.textContent = '确认';
+    titleEl.textContent = t('home.confirmTitle');
     msgEl.textContent = message;
     msgEl.classList.remove('hidden');
     input.value = '';
@@ -1629,7 +1635,7 @@ function openBookmarkModal({
     bookmarkId: bookmark?.id || null,
     folderId: folderId || state.selectedFolderId
   };
-  modal.title.textContent = mode === 'add' ? '添加书签' : '编辑书签';
+  modal.title.textContent = mode === 'add' ? t('home.addBookmark') : t('home.editBookmark');
   modal.url.value = bookmark?.url || '';
   modal.name.value = bookmark?.name || '';
   modal.remark.value = bookmark?.remark || '';
@@ -1672,7 +1678,7 @@ async function handleModalSave() {
   const folderId = modalCtx.folderId;
   const url = modal.url.value.trim();
   if (!url) {
-    alert('请输入网址');
+    alert(t('home.urlRequired'));
     return;
   }
   const name = modal.name.value.trim() || undefined;
@@ -1771,7 +1777,7 @@ async function fetchTitle(url) {
 async function handleAiAnalyze() {
   const url = modal.url.value.trim();
   if (!url) {
-    alert('请先输入网址');
+    alert(t('home.urlRequiredBeforeAnalyze'));
     return;
   }
 
@@ -1779,7 +1785,7 @@ async function handleAiAnalyze() {
   try {
     new URL(url);
   } catch (e) {
-    alert('请输入有效的网址');
+    alert(t('home.invalidUrl'));
     return;
   }
 
@@ -2079,17 +2085,17 @@ async function showSyncPrompt(fileName, cloudTime, localTime) {
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"></path>
             </svg>
           </div>
-          <h3 style="font-size: 18px; font-weight: 600; color: #111827; margin: 0;">发现云端更新</h3>
+          <h3 style="font-size: 18px; font-weight: 600; color: #111827; margin: 0;">${t('home.syncFoundTitle')}</h3>
         </div>
         <div style="margin-bottom: 16px; font-size: 14px; color: #6b7280;">
-          <p style="margin-bottom: 8px;">检测到云端有更新的数据：</p>
+          <p style="margin-bottom: 8px;">${t('home.syncFoundText')}</p>
           <div style="background: #f9fafb; padding: 12px; border-radius: 4px; margin-bottom: 8px;">
-            <p style="margin: 4px 0;"><strong>云端文件：</strong>${fileName}</p>
-            <p style="margin: 4px 0;"><strong>云端时间：</strong>${cloudTime}</p>
-            <p style="margin: 4px 0;"><strong>本地时间：</strong>${localTime}</p>
+            <p style="margin: 4px 0;"><strong>${t('home.cloudFile')}</strong>${escapeHtml(fileName)}</p>
+            <p style="margin: 4px 0;"><strong>${t('home.cloudTime')}</strong>${escapeHtml(cloudTime)}</p>
+            <p style="margin: 4px 0;"><strong>${t('home.localTime')}</strong>${escapeHtml(localTime)}</p>
           </div>
           <p style="margin-top: 8px; color: #d97706;">
-            <strong>注意：</strong>同步前会自动备份当前本地数据，确保数据安全。
+            <strong>${t('home.syncNotice')}</strong>
           </p>
         </div>
         <div style="display: flex; justify-content: flex-end; gap: 12px;">
@@ -2101,7 +2107,7 @@ async function showSyncPrompt(fileName, cloudTime, localTime) {
             cursor: pointer;
             border-radius: 4px;
           ">
-            稍后再说
+            ${t('home.later')}
           </button>
           <button id="sync-confirm" style="
             padding: 8px 16px;
@@ -2111,7 +2117,7 @@ async function showSyncPrompt(fileName, cloudTime, localTime) {
             border-radius: 4px;
             cursor: pointer;
           ">
-            立即同步
+            ${t('home.syncNow')}
           </button>
         </div>
       </div>
@@ -2137,12 +2143,12 @@ async function showSyncPrompt(fileName, cloudTime, localTime) {
 // 执行同步并显示反馈
 async function syncFromCloudWithFeedback(fileName) {
   if (isSyncing) {
-    toast('⚠️ 正在同步中，请稍候...', 2000);
+    toast(t('home.syncing'), 2000);
     return;
   }
   
   isSyncing = true;
-  showGlobalLoading('正在同步云端数据...');
+  showGlobalLoading(t('home.syncingCloudData'));
   
   try {
     const response = await chrome.runtime.sendMessage({
@@ -2153,13 +2159,13 @@ async function syncFromCloudWithFeedback(fileName) {
     if (response?.ok) {
       // 同步成功，依赖 data:changed 通知触发界面刷新，避免重复渲染
       hideGlobalLoading();
-      toast('✅ 同步成功！数据已更新', 2000);
+      toast(t('home.syncSuccess'), 2000);
     } else {
-      throw new Error(response?.error || '同步失败');
+      throw new Error(response?.error || t('home.syncFailedFallback'));
     }
   } catch (e) {
     hideGlobalLoading();
-    toast(`❌ 同步失败：${e.message}`, 3000);
+    toast(t('home.syncFailed', { message: e.message }), 3000);
     console.error('同步失败:', e);
   } finally {
     isSyncing = false;
@@ -2189,7 +2195,7 @@ function hideLoadingToast(toast) {
 }
 
 // 显示全局loading遮罩
-function showGlobalLoading(message = '正在同步数据...') {
+function showGlobalLoading(message = t('home.syncingData')) {
   if (globalLoading) return globalLoading;
   
   globalLoading = document.createElement('div');
@@ -2228,7 +2234,7 @@ function showGlobalLoading(message = '正在同步数据...') {
         margin: 0 auto 16px;
       "></div>
       <div style="font-weight: 500;">${message}</div>
-      <div style="font-size: 14px; opacity: 0.8; margin-top: 8px;">请勿关闭页面或进行其他操作</div>
+      <div style="font-size: 14px; opacity: 0.8; margin-top: 8px;">${t('home.pleaseWaitOperation')}</div>
     </div>
     <style>
       @keyframes spin {
@@ -2251,8 +2257,8 @@ let currentGuideStep = 0;
 const guideSteps = [
   {
     target: '#btn-add-folder',
-    title: '创建你的第一个文件夹',
-    content: '点击这个按钮来创建你的第一个文件夹，用于组织管理你的书签。',
+    title: t('home.firstFolderTitle'),
+    content: t('home.firstFolderContent'),
     position: 'right',
     interactive: true,  // 允许交互
     autoAdvance: 'modal',  // 等待弹窗关闭后自动前进
@@ -2260,8 +2266,8 @@ const guideSteps = [
   },
   {
     target: '.folder-item',
-    title: '选择文件夹',
-    content: '点击文件夹可以选中它，选中后就可以在文件夹中添加书签了。',
+    title: t('home.chooseFolderTitle'),
+    content: t('home.chooseFolderContent'),
     position: 'right',
     interactive: true,
     autoAdvance: 'click',  // 点击后自动前进
@@ -2273,8 +2279,8 @@ const guideSteps = [
   },
   {
     target: '#btn-add-new-item',
-    title: '添加书签',
-    content: '在文件夹中添加你喜欢的网站书签，方便快速访问。',
+    title: t('home.addBookmarkTitle'),
+    content: t('home.addBookmarkContent'),
     position: 'right',  // 显示在右侧
     interactive: true,
     autoAdvance: 'modal',  // 等待弹窗关闭
@@ -2287,14 +2293,14 @@ const guideSteps = [
   },
   {
     target: '#btn-settings',
-    title: '设置页面',
-    content: '在设置页面可以配置WebDAV同步、导入浏览器书签等高级功能。',
+    title: t('home.settingsTitleGuide'),
+    content: t('home.settingsContentGuide'),
     position: 'bottom'
   },
   {
     target: '#search',
-    title: '搜索功能',
-    content: '使用搜索框可以快速找到你需要的书签。',
+    title: t('home.searchTitleGuide'),
+    content: t('home.searchContentGuide'),
     position: 'bottom'
   }
 ];
@@ -2405,16 +2411,16 @@ async function showGuideStep(stepIndex) {
   });
   
   // 更新步骤文本
-  document.getElementById('guide-step-indicator').textContent = `步骤 ${stepIndex + 1} / ${guideSteps.length}`;
+  document.getElementById('guide-step-indicator').textContent = t('home.guideStep', { current: stepIndex + 1, total: guideSteps.length });
   document.getElementById('guide-title').textContent = step.title;
   document.getElementById('guide-content').textContent = step.content;
   
   // 更新按钮文本
   const nextBtn = document.getElementById('guide-next');
   if (stepIndex === guideSteps.length - 1) {
-    nextBtn.textContent = '完成引导';
+    nextBtn.textContent = t('home.finishGuide');
   } else {
-    nextBtn.textContent = '下一步';
+    nextBtn.textContent = t('home.nextStep');
   }
   
   // 高亮目标元素
@@ -2623,12 +2629,11 @@ async function showMoveModal(type, sourceId, sourceFolderId = null, itemName = '
   const confirmBtn = document.getElementById('move-confirm');
   
   // 设置标题
-  const typeText = type === 'folder' ? '文件夹' : '书签';
-  title.textContent = `移动${typeText}`;
+  title.textContent = type === 'folder' ? t('home.moveFolder') : t('home.moveBookmark');
   
   // 禁用确认按钮
   confirmBtn.disabled = true;
-  confirmBtn.textContent = '移动';
+  confirmBtn.textContent = t('common.move');
   
   // 渲染文件夹树
   await renderMoveFolderTree();
@@ -2669,10 +2674,10 @@ async function renderMoveFolderTree() {
     // 如果是一级文件夹，禁用根目录选项
     if (sourceFolder && !sourceFolder.parentId) {
       rootOption.classList.add('disabled');
-      rootOption.title = '一级文件夹不能移动到根目录';
+      rootOption.title = t('home.rootMoveDisabled');
     } else {
       rootOption.classList.remove('disabled');
-      rootOption.title = '移动到根目录（成为一级文件夹）';
+      rootOption.title = t('home.rootMoveEnabled');
     }
   } else {
     // 书签不能移动到根目录，隐藏根目录选项
@@ -2745,9 +2750,9 @@ function createProgressiveFolderOption(folder, level) {
   // 构建路径显示
   const pathParts = [];
   if (level === 0) {
-    pathParts.push('一级文件夹');
+    pathParts.push(t('home.topLevelFolder'));
   } else {
-    pathParts.push(`${level + 1}级文件夹`);
+    pathParts.push(t('home.levelFolder', { level: level + 1 }));
   }
   
   // 添加展开/收起图标 - 使用清晰的方形符号
@@ -2913,9 +2918,9 @@ function bindMoveModalEvents() {
       renderFolderList();
       renderSubfolders();
       renderBookmarkGrid();
-      toast('✅ 移动成功', 1500);
+      toast(t('home.moveSuccess'), 1500);
     } else {
-      toast('❌ 移动失败', 2000);
+      toast(t('home.moveFailed'), 2000);
     }
   };
 }
@@ -2934,7 +2939,7 @@ async function performMove() {
     // 移动书签
     const targetFolderId = selectedTargetId === 'root' ? null : selectedTargetId;
     if (!targetFolderId) {
-      toast('❌ 书签不能移动到根目录', 2000);
+      toast(t('home.bookmarkCannotMoveRoot'), 2000);
       return false;
     }
     return await moveBookmark({
