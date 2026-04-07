@@ -22,8 +22,8 @@ import {
   DEFAULT_BG_URL,
   isFirstTimeUser,
   // iconData相关函数
-  getIconDataUrl,
-  setIconDataUrl,
+  readIconData,
+  writeIconData,
   // 兼容性导入（已弃用的API）
   addSubfolder,
   renameSubfolder,
@@ -56,6 +56,18 @@ let modalKeydownHandler = null;
 let hasCheckedCloudOnStartup = false;
 let globalLoading = null;
 let isSyncing = false;
+const ICON_PRELOAD_CONCURRENCY = 6;
+const ICON_PRELOAD_RETRY_DELAY = 5 * 60 * 1000;
+let iconDataCache = null;
+let iconDataCachePromise = null;
+const pendingIconDataWrites = new Map();
+let iconDataFlushTimer = null;
+let iconDataFlushPromise = null;
+const iconPreloadQueue = [];
+const iconPreloadInFlight = new Map();
+const queuedIconPreloads = new Set();
+const iconPreloadFailures = new Map();
+let activeIconPreloads = 0;
 
 await ensureInit();
 await bootstrap();
@@ -79,6 +91,11 @@ chrome.storage.onChanged.addListener((changes, area) => {
       updateDataVersion(newData);
     }
   }
+
+  if (area === 'local' && changes.iconData) {
+    iconDataCache = changes.iconData.newValue || {};
+    iconDataCachePromise = null;
+  }
 });
 
 // 监听所有操作以触发“操作型自动备份”
@@ -89,6 +106,143 @@ async function recordHandleBackup() {
       source: 'auto'
     });
   } catch (e) {}
+}
+
+async function getIconDataCache() {
+  if (iconDataCache) return iconDataCache;
+
+  if (!iconDataCachePromise) {
+    iconDataCachePromise = readIconData()
+      .then((data) => {
+        iconDataCache = data || {};
+        return iconDataCache;
+      })
+      .finally(() => {
+        iconDataCachePromise = null;
+      });
+  }
+
+  return iconDataCachePromise;
+}
+
+function rememberIconData(iconUrl, dataUrl) {
+  if (!iconUrl || !dataUrl) return;
+  iconDataCache = iconDataCache || {};
+  iconDataCache[iconUrl] = dataUrl;
+  pendingIconDataWrites.set(iconUrl, dataUrl);
+  scheduleFlushIconDataWrites();
+}
+
+function scheduleFlushIconDataWrites() {
+  if (iconDataFlushTimer) return;
+
+  iconDataFlushTimer = setTimeout(() => {
+    iconDataFlushTimer = null;
+    flushIconDataWrites().catch((e) => {
+      console.warn('写入图标缓存失败:', e);
+    });
+  }, 300);
+}
+
+async function flushIconDataWrites() {
+  if (iconDataFlushPromise) return iconDataFlushPromise;
+  if (pendingIconDataWrites.size === 0) return;
+
+  const updates = new Map(pendingIconDataWrites);
+  pendingIconDataWrites.clear();
+
+  iconDataFlushPromise = (async () => {
+    const latest = await readIconData();
+    updates.forEach((dataUrl, iconUrl) => {
+      latest[iconUrl] = dataUrl;
+    });
+    await writeIconData(latest);
+    iconDataCache = latest;
+  })().catch((e) => {
+    updates.forEach((dataUrl, iconUrl) => pendingIconDataWrites.set(iconUrl, dataUrl));
+    throw e;
+  }).finally(() => {
+    iconDataFlushPromise = null;
+    if (pendingIconDataWrites.size > 0) {
+      scheduleFlushIconDataWrites();
+    }
+  });
+
+  return iconDataFlushPromise;
+}
+
+function updateVisibleBookmarkIcons(iconUrl, dataUrl) {
+  if (!iconUrl || !dataUrl) return;
+
+  document.querySelectorAll('.bookmark-card .favicon').forEach((img) => {
+    if (img.dataset.iconUrl !== iconUrl) return;
+    img.src = dataUrl;
+    img.style.display = 'block';
+    const mono = img.parentElement?.querySelector('.mono-icon');
+    if (mono) mono.style.display = 'none';
+  });
+}
+
+function shouldRetryIconPreload(iconUrl) {
+  const failedAt = iconPreloadFailures.get(iconUrl);
+  return !failedAt || (Date.now() - failedAt) > ICON_PRELOAD_RETRY_DELAY;
+}
+
+function queueIconPreload(iconUrl) {
+  if (!iconUrl) return;
+
+  const cachedDataUrl = iconDataCache?.[iconUrl];
+  if (cachedDataUrl) {
+    updateVisibleBookmarkIcons(iconUrl, cachedDataUrl);
+    return;
+  }
+
+  if (!shouldRetryIconPreload(iconUrl)) return;
+  if (queuedIconPreloads.has(iconUrl) || iconPreloadInFlight.has(iconUrl)) return;
+
+  queuedIconPreloads.add(iconUrl);
+  iconPreloadQueue.push(iconUrl);
+  pumpIconPreloadQueue();
+}
+
+function pumpIconPreloadQueue() {
+  while (activeIconPreloads < ICON_PRELOAD_CONCURRENCY && iconPreloadQueue.length > 0) {
+    const iconUrl = iconPreloadQueue.shift();
+    if (!iconUrl) continue;
+
+    activeIconPreloads += 1;
+    const job = preloadIconData(iconUrl)
+      .catch((e) => {
+        console.warn('预热图标失败:', e);
+      })
+      .finally(() => {
+        activeIconPreloads -= 1;
+        queuedIconPreloads.delete(iconUrl);
+        iconPreloadInFlight.delete(iconUrl);
+        pumpIconPreloadQueue();
+      });
+
+    iconPreloadInFlight.set(iconUrl, job);
+  }
+}
+
+async function preloadIconData(iconUrl) {
+  const cachedDataUrl = iconDataCache?.[iconUrl];
+  if (cachedDataUrl) {
+    updateVisibleBookmarkIcons(iconUrl, cachedDataUrl);
+    return cachedDataUrl;
+  }
+
+  const dataUrl = await toDataUrlSafe(iconUrl);
+  if (!dataUrl) {
+    iconPreloadFailures.set(iconUrl, Date.now());
+    return '';
+  }
+
+  iconPreloadFailures.delete(iconUrl);
+  rememberIconData(iconUrl, dataUrl);
+  updateVisibleBookmarkIcons(iconUrl, dataUrl);
+  return dataUrl;
 }
 
 // 检查是否正在同步，如果是则阻止操作
@@ -709,38 +863,27 @@ async function renderSubfolders() {
 }
 
 /**
- * 异步渲染书签图标
- * 从iconData缓存中获取base64数据，如果没有则先显示iconUrl，后续懒加载base64
+ * 渲染书签图标
+ * 优先复用已读取到内存中的 iconData 缓存，避免每个书签单独读取 chrome.storage
  * @param {HTMLElement} imgElement - 图片元素
  * @param {HTMLElement} monoElement - 单色图标元素  
  * @param {Object} bookmark - 书签对象
+ * @param {string} cachedDataUrl - 已缓存的 base64 data URL
  */
-async function renderBookmarkIcon(imgElement, monoElement, bookmark) {
+function renderBookmarkIcon(imgElement, monoElement, bookmark, cachedDataUrl = '') {
   if (bookmark.iconType === 'favicon' && bookmark.iconUrl) {
-    // 先尝试从缓存获取base64数据
-    const cachedDataUrl = await getIconDataUrl(bookmark.iconUrl);
-    
+    imgElement.dataset.iconUrl = bookmark.iconUrl;
+    imgElement.decoding = 'async';
+    imgElement.loading = 'eager';
+
     // 设置图片源，优先使用缓存的base64，否则使用iconUrl
     imgElement.src = cachedDataUrl || bookmark.iconUrl;
     imgElement.style.display = 'block';
     monoElement.style.display = 'none';
-    
-    // 图片加载成功后，如果没有缓存的base64数据，则懒加载获取
-    imgElement.onload = async () => {
-      if (!cachedDataUrl && bookmark.iconUrl) {
-        try {
-          const dataUrl = await toDataUrlSafe(bookmark.iconUrl);
-          if (dataUrl) {
-            // 保存到缓存，不再更新书签数据
-            await setIconDataUrl(bookmark.iconUrl, dataUrl);
-            // 更新图片显示
-            imgElement.src = dataUrl;
-          }
-        } catch (e) {
-          console.warn('懒加载图标失败:', e);
-        }
-      }
-    };
+
+    if (!cachedDataUrl) {
+      queueIconPreload(bookmark.iconUrl);
+    }
     
     // 图片加载失败时显示临时单色图标
     imgElement.onerror = () => {
@@ -752,6 +895,7 @@ async function renderBookmarkIcon(imgElement, monoElement, bookmark) {
       monoElement.querySelector('.letter').textContent = letter.toUpperCase();
     };
   } else if (bookmark.mono) {
+    imgElement.dataset.iconUrl = '';
     // 显示单色图标
     monoElement.style.display = 'grid';
     monoElement.style.background = bookmark.mono.color;
@@ -761,9 +905,10 @@ async function renderBookmarkIcon(imgElement, monoElement, bookmark) {
 }
 
 async function renderBookmarkGrid() {
-  const {
-    data
-  } = await readAll();
+  const [{ data }, iconData] = await Promise.all([
+    readAll(),
+    getIconDataCache()
+  ]);
   const grid = document.getElementById('bookmark-grid');
   grid.innerHTML = '';
   if (!state.selectedFolderId) return;
@@ -1192,10 +1337,6 @@ async function renderBookmarkGrid() {
       });
       renderBookmarkGrid();
     });
-    const img = el.querySelector('.favicon');
-    const mono = el.querySelector('.mono-icon');
-    // 使用新的异步图标渲染函数
-    await renderBookmarkIcon(img, mono, bm);
     el.addEventListener('click', () => window.open(bm.url, '_blank'));
     el.addEventListener('contextmenu', (e) => {
       e.preventDefault();
@@ -1231,6 +1372,9 @@ async function renderBookmarkGrid() {
       ]);
     });
     grid.appendChild(el);
+    const img = el.querySelector('.favicon');
+    const mono = el.querySelector('.mono-icon');
+    renderBookmarkIcon(img, mono, bm, iconData?.[bm.iconUrl] || '');
   }
 
   // Add the virtual "Add New" card

@@ -6,6 +6,7 @@
 
   const STORAGE_KEY_DATA = 'mytab:data';
   const STORAGE_KEY_SETTINGS = 'mytab:settings';
+  const STORAGE_KEY_ICON_DATA = 'mytab:iconData';
 
   // 简易事件系统
   const storageChangedListeners = [];
@@ -24,6 +25,10 @@
       const raw = localStorage.getItem(STORAGE_KEY_SETTINGS);
       return raw ? safeParse(raw, defaultValue) : defaultValue;
     }
+    if (key === 'iconData') {
+      const raw = localStorage.getItem(STORAGE_KEY_ICON_DATA);
+      return raw ? safeParse(raw, defaultValue) : defaultValue;
+    }
     return defaultValue;
   }
 
@@ -40,6 +45,12 @@
       const oldVal = oldRaw ? safeParse(oldRaw, null) : undefined;
       localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(obj.settings));
       changes.settings = { oldValue: oldVal, newValue: obj.settings };
+    }
+    if ('iconData' in obj) {
+      const oldRaw = localStorage.getItem(STORAGE_KEY_ICON_DATA);
+      const oldVal = oldRaw ? safeParse(oldRaw, null) : undefined;
+      localStorage.setItem(STORAGE_KEY_ICON_DATA, JSON.stringify(obj.iconData));
+      changes.iconData = { oldValue: oldVal, newValue: obj.iconData };
     }
     if (Object.keys(changes).length > 0) {
       // 通知 storage.onChanged
