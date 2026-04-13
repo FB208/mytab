@@ -17,6 +17,7 @@ import {
   setCurrentLocale,
   t
 } from './i18n.js';
+import { WebDAVClient } from './webdav.js';
 
 /**
  * DOM元素引用映射
@@ -270,21 +271,21 @@ function renderDashboard() {
 
   setStatusChip(els.webdavStatusBadge, sync.text, sync.tone);
   setStatusChip(els.summarySyncBadge, sync.text, sync.tone);
-  els.summarySyncValue.textContent = sync.text;
-  els.summarySyncMeta.textContent = sync.meta;
+  if (els.summarySyncValue) els.summarySyncValue.textContent = sync.text;
+  if (els.summarySyncMeta) els.summarySyncMeta.textContent = sync.meta;
 
   setStatusChip(els.backupStatusBadge, backup.text, backup.tone);
   setStatusChip(els.summaryBackupBadge, backup.text, backup.tone);
-  els.summaryBackupValue.textContent = backup.text;
-  els.summaryBackupMeta.textContent = backup.meta;
+  if (els.summaryBackupValue) els.summaryBackupValue.textContent = backup.text;
+  if (els.summaryBackupMeta) els.summaryBackupMeta.textContent = backup.meta;
 
   setStatusChip(els.summaryLatestBadge, latest.badge, latest.tone);
-  els.summaryLatestValue.textContent = latest.text;
-  els.summaryLatestMeta.textContent = latest.meta;
+  if (els.summaryLatestValue) els.summaryLatestValue.textContent = latest.text;
+  if (els.summaryLatestMeta) els.summaryLatestMeta.textContent = latest.meta;
 
   setStatusChip(els.summaryLanguageBadge, language.text, language.tone);
-  els.summaryLanguageValue.textContent = language.text;
-  els.summaryLanguageMeta.textContent = language.meta;
+  if (els.summaryLanguageValue) els.summaryLanguageValue.textContent = language.text;
+  if (els.summaryLanguageMeta) els.summaryLanguageMeta.textContent = language.meta;
 
   els.syncHostValue.textContent = getWebdavHost(viewState.settings?.webdav?.url || '') || t('options.metricValuePending');
   els.syncAccessValue.textContent = sync.text;
@@ -559,9 +560,10 @@ function bind() {
       viewState.connectionError = '';
       renderDashboard();
       toast(t('options.testingConnection'));
-      const res = await chrome.runtime.sendMessage({ type: 'webdav:test', config });
+      const client = new WebDAVClient(config);
+      const res = await client.testAuthentication();
       
-      if (res?.ok) {
+      if (res?.success) {
         if (res.canWrite) {
           viewState.connectionStatus = 'readWrite';
           toast(t('options.connectionSuccessReadWrite'));
@@ -672,7 +674,7 @@ function bind() {
   });
 
   // 刷新备份列表按钮
-  els.refresh.addEventListener('click', refreshList);
+  els.refresh.addEventListener('click', () => refreshList({ requestPermission: true }));
 
   /**
    * 导入书签按钮点击事件
@@ -700,7 +702,7 @@ function bind() {
  * 刷新备份历史列表
  * 从WebDAV服务器获取备份文件列表并显示
  */
-async function refreshList() {
+async function refreshList({ requestPermission = false } = {}) {
   if (!viewState.settings?.webdav?.url) {
     viewState.latestBackup = null;
     viewState.backupCount = 0;
@@ -710,13 +712,21 @@ async function refreshList() {
   }
 
   try {
+    if (requestPermission) {
+      const hasPermission = await requestWebdavPermissions(viewState.settings.webdav.url);
+      if (!hasPermission) {
+        viewState.latestBackup = null;
+        viewState.backupCount = 0;
+        renderDashboard();
+        renderEmptyHistory(t('options.loadFailed', { message: t('options.webdavPermissionRequired') }));
+        return;
+      }
+    }
+
     renderEmptyHistory(t('common.loading'));
     
-    // 请求后台获取备份列表
-    const res = await chrome.runtime.sendMessage({ type: 'backup:list' });
-    if (!res?.ok) throw new Error(res?.error || '');
-    
-    const items = (res.list || []).slice().sort((a, b) => b.lastmod - a.lastmod);
+    const client = new WebDAVClient(viewState.settings.webdav);
+    const items = (await client.list()).slice().sort((a, b) => b.lastmod - a.lastmod);
     viewState.latestBackup = items[0] || null;
     viewState.backupCount = items.length;
     renderDashboard();
@@ -732,7 +742,7 @@ async function refreshList() {
     // 渲染备份列表
     items.forEach(item => {
       const li = document.createElement('li');
-      li.className = 'glass';
+      li.className = 'backup-history-item';
 
       const mainDiv = document.createElement('div');
       mainDiv.className = 'backup-item-main';
@@ -804,7 +814,7 @@ async function refreshList() {
  */
 function normalizeUrl(u) {
   if (!u) return '';
-  if (!/\/ $/.test(u)) return u + '/';
+  if (!/\/$/.test(u)) return u + '/';
   return u;
 }
 
