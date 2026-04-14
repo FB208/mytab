@@ -17,7 +17,6 @@ import {
   setCurrentLocale,
   t
 } from './i18n.js';
-import { WebDAVClient } from './webdav.js';
 
 /**
  * DOM元素引用映射
@@ -120,6 +119,27 @@ function getBackupTypeLabel(fileName) {
   if (fileName.includes('_user_')) return t('common.manual');
   if (fileName.includes('_handle_')) return t('common.auto');
   return t('options.backupTypeSnapshot');
+}
+
+async function sendBackgroundMessage(message) {
+  const response = await chrome.runtime.sendMessage(message);
+  if (!response?.ok) {
+    throw new Error(response?.error || t('common.unknownError'));
+  }
+  return response;
+}
+
+async function withButtonBusy(button, loadingText, action) {
+  const oldText = button.textContent;
+  button.disabled = true;
+  button.textContent = loadingText;
+
+  try {
+    return await action();
+  } finally {
+    button.disabled = false;
+    button.textContent = oldText;
+  }
 }
 
 function renderEmptyHistory(message, detail = '') {
@@ -559,23 +579,20 @@ function bind() {
       viewState.connectionStatus = config.url ? 'checking' : 'notConfigured';
       viewState.connectionError = '';
       renderDashboard();
-      toast(t('options.testingConnection'));
-      const client = new WebDAVClient(config);
-      const res = await client.testAuthentication();
+
+      const res = await withButtonBusy(els.test, t('options.testingConnection'), async () => {
+        toast(t('options.testingConnection'));
+        return await sendBackgroundMessage({ type: 'webdav:test', config });
+      });
       
-      if (res?.success) {
-        if (res.canWrite) {
+      if (res.canWrite) {
           viewState.connectionStatus = 'readWrite';
           toast(t('options.connectionSuccessReadWrite'));
-        } else {
-          viewState.connectionStatus = 'readOnly';
-          toast(t('options.connectionSuccessReadOnly'));
-        }
       } else {
-        viewState.connectionStatus = 'failed';
-        viewState.connectionError = res?.error || t('options.connectionFailed');
-        toast(`❌ ${res?.error || t('options.connectionFailed')}`);
+        viewState.connectionStatus = 'readOnly';
+        toast(t('options.connectionSuccessReadOnly'));
       }
+
       renderDashboard();
     } catch (e) {
       viewState.connectionStatus = 'failed';
@@ -591,27 +608,13 @@ function bind() {
    */
   els.backupNow.addEventListener('click', async () => {
     try {
-      // 显示加载状态
-      els.backupNow.disabled = true;
-      const oldText = els.backupNow.textContent;
-      els.backupNow.textContent = t('options.backupRunning');
-      
-      toast(t('options.backupStarted'));
-      const res = await chrome.runtime.sendMessage({ type: 'backup:manual' });
-      
-      if (res?.ok) {
+      await withButtonBusy(els.backupNow, t('options.backupRunning'), async () => {
+        toast(t('options.backupStarted'));
+        await sendBackgroundMessage({ type: 'backup:manual' });
         toast(t('options.backupCompleted'));
         await refreshList(); // 刷新备份列表
-      } else {
-        toast(t('options.operationFailed', { message: res?.error || '' }));
-      }
-      
-      // 恢复按钮状态
-      els.backupNow.textContent = oldText;
-      els.backupNow.disabled = false;
+      });
     } catch (e) {
-      els.backupNow.disabled = false;
-      els.backupNow.textContent = t('options.backupNow');
       toast(t('options.operationFailed', { message: String(e?.message || e) }));
     }
   });
@@ -622,16 +625,9 @@ function bind() {
    */
   els.checkCloud.addEventListener('click', async () => {
     try {
-      // 显示加载状态
-      els.checkCloud.disabled = true;
-      const oldText = els.checkCloud.textContent;
-      els.checkCloud.textContent = t('options.checkingCloud');
-      
-      // 请求后台检查云端数据
-      const res = await chrome.runtime.sendMessage({ type: 'cloud:manual-check' });
-      if (!res?.ok) {
-        throw new Error(res?.error || t('options.checkFailed'));
-      }
+      const res = await withButtonBusy(els.checkCloud, t('options.checkingCloud'), async () => {
+        return await sendBackgroundMessage({ type: 'cloud:manual-check' });
+      });
       
       if (!res.result) {
         toast(t('options.webdavOrBackupDisabled'));
@@ -653,23 +649,17 @@ function bind() {
       
       if (shouldSync) {
         // 执行同步
-        const syncRes = await chrome.runtime.sendMessage({ 
-          type: 'cloud:sync', 
-          fileName: cloudFile.name 
-        });
-        
-        if (syncRes?.ok) {
+        await withButtonBusy(els.checkCloud, t('common.loading'), async () => {
+          await sendBackgroundMessage({ 
+            type: 'cloud:sync', 
+            fileName: cloudFile.name 
+          });
           toast(t('options.syncSuccess'));
           await refreshList(); // 刷新备份列表
-        } else {
-          throw new Error(syncRes?.error || t('home.syncFailedFallback'));
-        }
+        });
       }
     } catch (e) {
       toast(t('options.actionFailed', { message: String(e?.message || e) }));
-    } finally {
-      els.checkCloud.disabled = false;
-      els.checkCloud.textContent = t('options.checkCloudUpdates');
     }
   });
 
@@ -725,8 +715,8 @@ async function refreshList({ requestPermission = false } = {}) {
 
     renderEmptyHistory(t('common.loading'));
     
-    const client = new WebDAVClient(viewState.settings.webdav);
-    const items = (await client.list()).slice().sort((a, b) => b.lastmod - a.lastmod);
+    const response = await sendBackgroundMessage({ type: 'backup:list' });
+    const items = (response.list || []).slice().sort((a, b) => b.lastmod - a.lastmod);
     viewState.latestBackup = items[0] || null;
     viewState.backupCount = items.length;
     renderDashboard();
@@ -779,14 +769,27 @@ async function refreshList({ requestPermission = false } = {}) {
        */
       btn.addEventListener('click', async () => {
         if (!confirm(t('options.restoreConfirm'))) return;
-        const r = await chrome.runtime.sendMessage({ 
-          type: 'backup:restore', 
-          name: item.name 
-        });
-        if (r?.ok) {
+
+        const hasPermission = await requestWebdavPermissions(viewState.settings.webdav.url);
+        if (!hasPermission) {
+          return;
+        }
+
+        try {
+          await withButtonBusy(btn, t('common.loading'), async () => {
+            await sendBackgroundMessage({ 
+              type: 'backup:restore', 
+              name: item.name 
+            });
+          });
+
+          const { data } = await readAll();
+          viewState.data = data;
+          renderDashboard();
+          await refreshList();
           alert(t('options.restored'));
-        } else {
-          alert(t('options.restoreFailed', { message: r?.error || '' }));
+        } catch (e) {
+          alert(t('options.restoreFailed', { message: String(e?.message || e) }));
         }
       });
 

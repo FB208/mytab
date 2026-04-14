@@ -18,8 +18,6 @@ import {
   doBackupToCloud,
 } from '../scripts/webdav-sync.js';
 
-setCurrentLocale(await getCurrentLocale());
-
 /**
  * 扩展安装/更新时的初始化处理
  * 确保默认设置存在并启动定时备份
@@ -29,6 +27,7 @@ chrome.runtime.onInstalled.addListener(async () => {
   if (!settings || !('backup' in settings)) {
     await writeSettings(DEFAULT_SETTINGS);
   }
+  await refreshLocale();
   await ensureAlarm(); // 设置定时备份闹钟
 });
 
@@ -39,7 +38,7 @@ chrome.runtime.onInstalled.addListener(async () => {
 chrome.storage.onChanged.addListener(async (changes, area) => {
   // 设置变化：重新配置定时备份
   if (area === 'local' && changes.settings) {
-    setCurrentLocale(await getCurrentLocale());
+    await refreshLocale();
     await ensureAlarm();
   }
   
@@ -55,6 +54,10 @@ chrome.storage.onChanged.addListener(async (changes, area) => {
     }
   }
 });
+
+async function refreshLocale() {
+  setCurrentLocale(await getCurrentLocale());
+}
 
 /**
  * 定时闹钟触发处理
@@ -321,6 +324,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   
   // 返回true表示将异步响应
   return true;
+});
+
+refreshLocale().catch((e) => {
+  console.warn('初始化后台语言失败:', e);
 });
 
 /**

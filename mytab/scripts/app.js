@@ -105,16 +105,6 @@ chrome.storage.onChanged.addListener((changes, area) => {
   }
 });
 
-// 监听所有操作以触发“操作型自动备份”
-async function recordHandleBackup() {
-  try {
-    await chrome.runtime.sendMessage({
-      type: 'backup:manual',
-      source: 'auto'
-    });
-  } catch (e) {}
-}
-
 async function getIconDataCache() {
   if (iconDataCache) return iconDataCache;
 
